@@ -19,9 +19,18 @@
 #include "DistributionPanel.h"
 
 //==============================================================================
+/*
+    This component represents a dissonance calc without its
+    corresponding distribution data. (Which is held in DissCalc)
+ 
+    It has gui components for setting some calc data into the valuetree data model,
+    callbacks received from the valuetree data model for setting DisMAL data,
+    and the ability to draw dissonance maps.
+*/
 class DissonanceMap   : public Component,
                         public TextEditor::Listener,
                         public ComboBox::Listener,
+                        public Button::Listener,
                         public ValueTree::Listener
 {
 public:
@@ -31,25 +40,28 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // GUI callbacks to set valuetree data
     void comboBoxChanged (ComboBox* changedBox) override;
-    
     void textEditorFocusLost (TextEditor& editor) override;
     void textEditorReturnKeyPressed (TextEditor& editor) override;
+    void buttonClicked (Button* clickedButton) override;
     
+    // Data model callbacks to set DisMAL data
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override;
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override;
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override;
+    
+    // Unused pure-virtual callbacks inhereted from ValueTree::Listener
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override {}
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
     void valueTreeRedirected (ValueTree& redirectedTree) override {}
     
-    void drawMap();
-    
     ValueTree mapData;
 
 private:
-    ThemedComboBox dissonanceModel, logSteps;
+    ThemedComboBox dissonanceModel;
     ThemedTextEditor startFreq, endRatio;
+    ThemedToggleButton lockScale, logSteps;
     
     DissonanceCalc calc;
     NormalisableRange<float> normalizer, denormalizer;
@@ -60,6 +72,9 @@ private:
 };
 
 //==============================================================================
+/*
+    Simple container component for DissonanceMap components.  Goes inside a MapViewport.
+*/
 class MapList   : public Component,
                   public ValueTree::Listener
 {
@@ -70,8 +85,11 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // Callbacks to create or remove DissonanceMap components
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override;
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override;
+    
+    // Unused pure-virtual callbacks inhereted from ValueTree::Listener
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override {}
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override {}
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
@@ -79,6 +97,7 @@ public:
     
     OwnedArray<DissonanceMap> maps;
     ValueTree mapsData;
+    UndoManager* undo;
 private:
     int mapHeight;
     
@@ -86,6 +105,10 @@ private:
 };
 
 //==============================================================================
+/*
+    This subclass of Viewport is only created to override visibleAreaChanged(),
+    to keep this view and the DissCalcPanel views in sync.
+*/
 class MapViewport   : public Viewport
 {
 public:
@@ -96,6 +119,25 @@ public:
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MapViewport)
+};
+
+//==============================================================================
+class DissMapComponentFooter   : public Component,
+                                 public ComboBox::Listener
+{
+public:
+    DissMapComponentFooter();
+    ~DissMapComponentFooter();
+    
+    void paint (Graphics&) override;
+    void resized() override;
+    
+    void comboBoxChanged (ComboBox* changedBox) override;
+    
+    ValueTree data;
+    
+private:
+    ThemedComboBox gridLines;
 };
 
 //==============================================================================
@@ -111,11 +153,12 @@ public:
     void paint (Graphics&) override;
     void resized() override;
     
-    void setData (ValueTree& calcList);
+    void setData (ValueTree& calcList, UndoManager& undo);
     
 private:
     MapList maps;
     MapViewport mapView;
+    DissMapComponentFooter footer;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DissMapComponent)
 };

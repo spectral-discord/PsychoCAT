@@ -21,9 +21,9 @@ public:
     static const Colour
     
     mainBackground,     mapBackground,      headerBackground,
-    buttonDisabled,
-    mainButton,         buttonPressed,      buttonHighlighted,
-    border,             text,               activeText;
+    buttonDisabled,     buttonPressed,      buttonHighlighted,
+    mainButton,         border,
+    text,               activeText;
     
 private:
     Theme();

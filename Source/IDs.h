@@ -18,7 +18,7 @@ namespace IDs
     #define DECLARE_ID(name) const juce::Identifier name (#name);
     
     // Tree
-    DECLARE_ID (Partial);
+    DECLARE_ID (Partial); 
     // Properties
     DECLARE_ID (Freq);
     DECLARE_ID (Amp);
@@ -28,12 +28,12 @@ namespace IDs
     DECLARE_ID (OvertoneDistribution);
     // Properties
     DECLARE_ID (Name);
+    DECLARE_ID (FundamentalFreq);
+    DECLARE_ID (FundamentalAmp);
     DECLARE_ID (MinInterval);
     DECLARE_ID (XAxis);
     DECLARE_ID (YAxis);
     DECLARE_ID (IsViewed);
-    DECLARE_ID (FundamentalFreq);
-    DECLARE_ID (FundamentalAmp);
     // Children: Partial[], Fundamental
     
     // Tree
@@ -45,6 +45,10 @@ namespace IDs
     DECLARE_ID (LogSteps);
     DECLARE_ID (NumSteps);
     DECLARE_ID (PreprocessorName);
+    DECLARE_ID (ScaleLocked);
+    DECLARE_ID (ScaleMin);
+    DECLARE_ID (ScaleMax);
+    DECLARE_ID (GridLines);
     // Children: OvertoneDistribution[]
     
     // Tree

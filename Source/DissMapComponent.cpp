@@ -19,26 +19,38 @@
 DissonanceMap::DissonanceMap()   : mapData (IDs::Calculator)
 {
     startFreq.setTextToShowWhenEmpty ("Start Freq", Theme::border);
+    startFreq.setTooltip (String ("Starting frequency\n")
+                          + String ("(left edge of the map)"));
     startFreq.setInputRestrictions (10, "1234567890.");
+    startFreq.setFont (15.f);
     addAndMakeVisible (startFreq);
     startFreq.addListener (this);
 
     endRatio.setTextToShowWhenEmpty ("End Ratio", Theme::border);
+    endRatio.setTooltip (String ("End frequency ratio\n")
+                          + String ("(right edge of the map)"));
     endRatio.setInputRestrictions (10, "1234567890.");
+    endRatio.setFont (15.f);
     addAndMakeVisible (endRatio);
     endRatio.addListener (this);
     
-    logSteps.addItem ("Linear Steps", 1);
-    logSteps.addItem ("Logarithmic Steps", 2);
-    logSteps.setSelectedId (1);
+    logSteps.setButtonText ("Log. Steps");
+    logSteps.setTooltip ("Set whether frequency step sizes\n grow linearly or logarithmically");
     logSteps.addListener (this);
     addAndMakeVisible (logSteps);
     
+    dissonanceModel.addSectionHeading ("Dissonance Model");
     dissonanceModel.addItem ("Sethares", 1);
     dissonanceModel.addItem ("Vassilakis", 2);
     dissonanceModel.setTextWhenNothingSelected ("Dissonance Model");
+    dissonanceModel.setTooltip ("Sets the dissonance model");
     dissonanceModel.addListener (this);
     addAndMakeVisible (dissonanceModel);
+    
+    lockScale.setButtonText ("Lock Scale");
+    lockScale.setTooltip ("Locks the dissonance scale (Y-axis)");
+    lockScale.addListener (this);
+    addAndMakeVisible (lockScale);
     
     mapData.addListener (this);
 }
@@ -55,23 +67,83 @@ void DissonanceMap::paint (Graphics& g)
     g.drawLine (0, getHeight() - 25, getWidth(), getHeight() - 25, 2);
     g.drawLine (0, getHeight(), getWidth(), getHeight(), 2);
     
+    // Check if all the data needed to calculate a dissonance map is available
     if (calc.isReadyToProcess())
     {
+        denormalizer.start = 0;
+        denormalizer.end = getHeight() - 25;
+        
+        // Draw map grid lines
+        int gridLines = mapData.getParent()[IDs::GridLines];
+        
+        if (gridLines < 4)
+        {
+            g.drawLine (0, denormalizer.convertFrom0to1 (0.5),
+                        getWidth(), denormalizer.convertFrom0to1 (0.5));
+            
+            if (gridLines < 3)
+            {
+                g.drawLine (0, denormalizer.convertFrom0to1 (0.25),
+                            getWidth(), denormalizer.convertFrom0to1 (0.25));
+                
+                g.drawLine (0, denormalizer.convertFrom0to1 (0.75),
+                            getWidth(), denormalizer.convertFrom0to1 (0.75));
+                
+                if (gridLines < 2)
+                {
+                    g.drawLine (0, denormalizer.convertFrom0to1 (0.125),
+                                getWidth(), denormalizer.convertFrom0to1 (0.125));
+                    
+                    g.drawLine (0, denormalizer.convertFrom0to1 (0.375),
+                                getWidth(), denormalizer.convertFrom0to1 (0.375));
+                    
+                    g.drawLine (0, denormalizer.convertFrom0to1 (0.625),
+                                getWidth(), denormalizer.convertFrom0to1 (0.625));
+                    
+                    g.drawLine (0, denormalizer.convertFrom0to1 (0.875),
+                                getWidth(), denormalizer.convertFrom0to1 (0.875));
+                }
+            }
+        }
+        
+        denormalizer.start = 5;
+        denormalizer.end = getHeight() - 30;
+        
         g.setColour (Theme::activeText);
 
         calc.calculateDissonanceMap();
         
-        denormalizer.start = 5;
-        denormalizer.end = getHeight() - 30;
-        denormalizer.interval = 1;
-        
         findMinAndMax (calc.get2dRawDissonanceData(), calc.getNumSteps(),
                        normalizer.start, normalizer.end);
+        
+        // Lock the dissonance scale or use locked scale values unless the scale needs to be expanded
+        // Might want to let dissonance values fall outside of the locked scale, we'll see...
+        if (mapData[IDs::ScaleLocked].operator bool())
+        {
+            if (! mapData.hasProperty (IDs::ScaleMax)
+                || mapData[IDs::ScaleMax].operator float() < normalizer.end)
+                mapData.setProperty (IDs::ScaleMax, normalizer.end, nullptr);
+            
+            if (! mapData.hasProperty (IDs::ScaleMin)
+                || mapData[IDs::ScaleMin].operator float() > normalizer.start)
+                mapData.setProperty (IDs::ScaleMin, normalizer.start, nullptr);
+            
+            normalizer.start = mapData[IDs::ScaleMin];
+            normalizer.end = mapData[IDs::ScaleMax];
+        }
+        
+        // Prevents attempting to draw within an invalid range
+        // This should only happen when only a single partial is present (creates no dissonance by itself)
+        if (normalizer.start == 0
+            && normalizer.end == 0)
+            return;
 
         float dissHeight;
         float nextDissHeight;
         
-        for (int i = 0; i < calc.getNumSteps(); ++i)
+        // Draw the dissonance curve
+        // (Inverted because (0, 0) is the top-left corner of the component)
+        for (int i = 0; i < calc.getNumSteps() - 1; ++i)
         {
             dissHeight = normalizer.convertTo0to1 (calc.getDissonanceAtStep (i));
             dissHeight = abs (dissHeight - 1);
@@ -84,33 +156,40 @@ void DissonanceMap::paint (Graphics& g)
             g.drawLine (i + 1, dissHeight, i + 2, nextDissHeight, 2);
         }
     }
+    /*
+    // Just for quick testing of data model operations
     else
     {
-        int width = 10;
-        int height = 10;
+        int x = 10, y = 10;
         
         for (int i = 0; i < calc.numOvertoneDistributions(); ++i)
         {
-            height = 10;
+            OvertoneDistribution& dist = *calc.getDistributionReference (i);
             
-            g.drawText (String (calc.getDistributionReference (i)->getFundamentalFreq())
-                        + " " + String (calc.getDistributionReference (i)->getFundamentalAmp()),
-                        width, height, 50, 15, Justification::centred);
+            g.drawText (String (dist.getFundamentalFreq()),
+                        x, y, 30, 15, Justification::centred);
             
-            height += 15;
+            g.drawText (String (dist.getFundamentalAmp()),
+                        x + 30, y, 30, 15, Justification::centred);
             
-            for (int j = 0; j < calc.getDistributionReference (i)->numPartials(); ++j)
+            y += 15;
+            
+            for (int j = 0; j < dist.numPartials(); ++j)
             {
-                g.drawText (String (calc.getDistributionReference (i)->getFreqRatio (j))
-                            + " " + String (calc.getDistributionReference (i)->getAmpRatio (j)),
-                            width, height, 50, 15, Justification::centred);
+                g.drawText (String (dist.getFreqRatio (j)),
+                            x, y, 30, 15, Justification::centred);
                 
-                height += 15;
+                g.drawText (String (dist.getAmpRatio (j)),
+                            x + 30, y, 30, 15, Justification::centred);
+                
+                y += 15;
             }
+        
+            x += 75;
+            y = 10;
             
-            width += 50;
         }
-    }
+    }*/
 }
 
 void DissonanceMap::resized()
@@ -120,7 +199,8 @@ void DissonanceMap::resized()
     
     startFreq.setBounds (footer.removeFromLeft (75));
     dissonanceModel.setBounds (footer.removeFromLeft (150).expanded (1, 0));
-    logSteps.setBounds (footer.removeFromLeft (150));
+    logSteps.setBounds (footer.removeFromLeft (100));
+    lockScale.setBounds (footer.removeFromLeft (100));
     endRatio.setBounds (footer.removeFromRight (75));
     
     mapData.setProperty (IDs::NumSteps, getWidth() - 2, nullptr);
@@ -128,18 +208,7 @@ void DissonanceMap::resized()
 
 void DissonanceMap::comboBoxChanged (ComboBox* changedBox)
 {
-    if (changedBox == &logSteps)
-    {
-        if (changedBox->getSelectedItemIndex() == 1)
-        {
-            mapData.setProperty (IDs::LogSteps, true, nullptr);
-        }
-        else
-        {
-            mapData.setProperty (IDs::LogSteps, false, nullptr);
-        }
-    }
-    else if (changedBox == &dissonanceModel)
+    if (changedBox == &dissonanceModel)
     {
         mapData.setProperty (IDs::ModelName, changedBox->getText(), nullptr);
     }
@@ -152,9 +221,20 @@ void DissonanceMap::textEditorFocusLost (TextEditor& editor)
         if (editor.getTextValue().getValue().operator float() >= 20
             && editor.getTextValue().getValue().operator float() <= 10000)
         {
-            mapData.setProperty (IDs::StartFreq, 
-                                 editor.getTextValue().getValue(),
-                                 nullptr);
+            if (mapData[IDs::StartFreq].operator float() > 0)
+            {
+                findParentComponentOfClass<MapList>()->undo->beginNewTransaction();
+                
+                mapData.setProperty (IDs::StartFreq,
+                                     editor.getTextValue().getValue(),
+                                     findParentComponentOfClass<MapList>()->undo);
+            }
+            else
+            {
+                mapData.setProperty (IDs::StartFreq,
+                                     editor.getTextValue().getValue(),
+                                     nullptr);
+            }
         }
         else
         {
@@ -165,9 +245,20 @@ void DissonanceMap::textEditorFocusLost (TextEditor& editor)
     {
         if (editor.getTextValue().getValue().operator float() > 1)
         {
-            mapData.setProperty (IDs::EndRatio,
-                                 editor.getTextValue().getValue(),
-                                 nullptr);
+            if (mapData[IDs::EndRatio].operator float() > 0)
+            {
+                findParentComponentOfClass<MapList>()->undo->beginNewTransaction();
+                
+                mapData.setProperty (IDs::EndRatio,
+                                     editor.getTextValue().getValue(),
+                                     findParentComponentOfClass<MapList>()->undo);
+            }
+            else
+            {
+                mapData.setProperty (IDs::EndRatio,
+                                     editor.getTextValue().getValue(),
+                                     nullptr);
+            }
         }
         else
         {
@@ -183,9 +274,11 @@ void DissonanceMap::textEditorReturnKeyPressed (TextEditor& editor)
         if (editor.getTextValue().getValue().operator float() >= 20
             && editor.getTextValue().getValue().operator float() <= 10000)
         {
+            findParentComponentOfClass<MapList>()->undo->beginNewTransaction();
+
             mapData.setProperty (IDs::StartFreq,
                                  editor.getTextValue(),
-                                 nullptr);
+                                 findParentComponentOfClass<MapList>()->undo);
         }
         else
         {
@@ -196,9 +289,11 @@ void DissonanceMap::textEditorReturnKeyPressed (TextEditor& editor)
     {
         if (editor.getTextValue().getValue().operator float() > 1)
         {
+            findParentComponentOfClass<MapList>()->undo->beginNewTransaction();
+
             mapData.setProperty (IDs::EndRatio,
                                  editor.getTextValue(),
-                                 nullptr);
+                                 findParentComponentOfClass<MapList>()->undo);
         }
         else
         {
@@ -207,6 +302,24 @@ void DissonanceMap::textEditorReturnKeyPressed (TextEditor& editor)
     }
     
     unfocusAllComponents();
+}
+
+void DissonanceMap::buttonClicked (Button* clickedButton)
+{
+    if (clickedButton == &lockScale)
+    {
+        mapData.setProperty (IDs::ScaleLocked, lockScale.getToggleState(), nullptr);
+        
+        if (! lockScale.getToggleState())
+        {
+            mapData.removeProperty (IDs::ScaleMax, nullptr);
+            mapData.removeProperty (IDs::ScaleMin, nullptr);
+        }
+    }
+    else if (clickedButton == &logSteps)
+    {
+        mapData.setProperty (IDs::LogSteps, logSteps.getToggleState(), nullptr);
+    }
 }
 
 void DissonanceMap::valueTreeChildAdded (ValueTree& parent, ValueTree& newChild)
@@ -218,18 +331,37 @@ void DissonanceMap::valueTreeChildAdded (ValueTree& parent, ValueTree& newChild)
         
         OvertoneDistribution* dist = calc.getDistributionReference (parent.indexOf (newChild));
         
+        /*
+            If the new distribution's valuetree already has fundamental and
+            partial data (ie, from duplicating another distribution or undo/redo),
+            these will ensure that the data is set in the DisMAL data model.
+        */
         if (newChild[IDs::FundamentalFreq].operator float() > 0
             && newChild[IDs::FundamentalAmp].operator float() > 0)
-            dist->setFundamental (newChild[IDs::FundamentalFreq], newChild[IDs::FundamentalAmp]);
-        
-        for (int i = 0; i < newChild.getNumChildren(); ++i)
         {
-            if (newChild.getChild (i).hasType (IDs::Partial)
-                && newChild.getChild (i)[IDs::Freq].operator float() > 0
-                && newChild.getChild (i)[IDs::Amp].operator float() > 0)
+            if (mapData.hasProperty (IDs::StartFreq)
+                && newChild[IDs::FundamentalFreq].operator float() < 20)
             {
-                dist->addPartial (newChild.getChild (i)[IDs::Freq],
-                                  newChild.getChild (i)[IDs::Amp]);
+                dist->setFundamentalFreq (newChild[IDs::FundamentalFreq].operator float()
+                                          * mapData[IDs::StartFreq].operator float());
+            }
+            else if (newChild[IDs::FundamentalFreq].operator float() > 0)
+            {
+                dist->setFundamentalFreq (newChild[IDs::FundamentalFreq]);
+            }
+
+            if (newChild[IDs::FundamentalAmp].operator float() > 0)
+                dist->setFundamentalAmp (newChild[IDs::FundamentalAmp]);
+        }
+        
+        for (auto subChild : newChild)
+        {
+            if (subChild.hasType (IDs::Partial)
+                && subChild[IDs::Freq].operator float() > 0
+                && subChild[IDs::Amp].operator float() > 0)
+            {
+                dist->addPartial (subChild[IDs::Freq],
+                                  subChild[IDs::Amp]);
             }
         }
     }
@@ -238,6 +370,7 @@ void DissonanceMap::valueTreeChildAdded (ValueTree& parent, ValueTree& newChild)
     {
         OvertoneDistribution* dist = calc.getDistributionReference (parent.getParent().indexOf (parent));
         
+        // Checks if the new partial already has valuetree data to set in corresponding DisMAL data
         if (newChild.hasProperty (IDs::Freq) && newChild.hasProperty (IDs::Amp)
             && newChild[IDs::Freq].operator float() > 0 && newChild[IDs::Amp].operator float() > 0)
         {
@@ -269,47 +402,77 @@ void DissonanceMap::valueTreeChildRemoved (ValueTree& parent, ValueTree& removed
     
     repaint();
 }
+
+/*  These callbacks set DisMAL data from the value tree data model.
+ 
+    While DisMAL does the actual processing internally, the value tree data model is used
+    in the app's MVC for all the functionalities it provides (undo management, callbacks, etc)
+*/
 void DissonanceMap::valueTreePropertyChanged (ValueTree& parent, const Identifier& ID)
 {
     if (parent == mapData && ID == IDs::NumSteps)
     {
-        calc.setNumSteps (mapData[ID]);
+        if (mapData[ID].operator int() > 0)
+            calc.setNumSteps (mapData[ID]);
     }
     else if (parent == mapData && ID == IDs::LogSteps)
     {
-        calc.useLogarithmicSteps (mapData[ID]);
+        calc.useLogarithmicSteps (mapData[ID].operator bool());
+        
+        logSteps.setToggleState (mapData[ID].operator bool(), dontSendNotification);
     }
     else if (parent == mapData && ID == IDs::StartFreq)
     {
-        if (parent.hasProperty (IDs::EndRatio))
+        // Ranges require both start and end to init
+        if (parent.hasProperty (IDs::EndRatio)
+            && mapData[ID].operator float() > 0)
             calc.setRange (mapData[ID],
                            mapData[ID].operator float()
                            * mapData[IDs::EndRatio].operator float());
         
+        // Update all distributions using a ratio to init their fundamental freq
         for (int i = 0; i < calc.numOvertoneDistributions(); ++i)
         {
-            float fundamentalFreq = mapData.getChild (i)[IDs::FundamentalFreq].operator float();
+            float fundamentalFreq = mapData.getChild (i)[IDs::FundamentalFreq];
             
-            if (fundamentalFreq < 20)
+            if (fundamentalFreq < 20
+                && mapData[ID].operator float() > 0)
             {
                 calc.getDistributionReference (i)->setFundamentalFreq (fundamentalFreq
                                                                        * mapData[ID].operator float());
             }
         }
+        
+        startFreq.setText (mapData[ID]);
     }
     else if (parent == mapData && ID == IDs::EndRatio)
     {
-        if (parent.hasProperty (IDs::StartFreq))
+        // Ranges require both start and end to init
+        if (parent.hasProperty (IDs::StartFreq)
+            && mapData[ID].operator float() > 0)
             calc.setRange (mapData[IDs::StartFreq],
                            mapData[ID].operator float()
                            * mapData[IDs::StartFreq].operator float());
+        
+        endRatio.setText (mapData[ID]);
     }
     else if (parent == mapData && ID == IDs::ModelName)
     {
+        // This will be modified when dynamic lib support is added
         if (mapData[ID] == "Sethares")
+        {
             calc.setModel (new SetharesModel());
+            dissonanceModel.setSelectedId (1);
+        }
         else if (mapData[ID] == "Vassilakis")
+        {
             calc.setModel (new VassilakisModel());
+            dissonanceModel.setSelectedId (2);
+        }
+    }
+    else if (parent == mapData && ID == IDs::ScaleLocked)
+    {
+        lockScale.setToggleState (mapData[ID].operator bool(), dontSendNotification);
     }
     else if (parent.hasType (IDs::OvertoneDistribution)
              || parent.hasType (IDs::Partial))
@@ -319,6 +482,8 @@ void DissonanceMap::valueTreePropertyChanged (ValueTree& parent, const Identifie
             if (parent.hasType (IDs::OvertoneDistribution)
                 && parent == mapData.getChild (i))
             {
+                OvertoneDistribution* dist = calc.getDistributionReference (i);
+                
                 if (ID == IDs::XAxis
                     && parent[IDs::XAxis].operator bool() == true)
                 {
@@ -326,25 +491,30 @@ void DissonanceMap::valueTreePropertyChanged (ValueTree& parent, const Identifie
                 }
                 else if (ID == IDs::Mute)
                 {
-                    calc.getDistributionReference (i)->mute (parent[IDs::Mute]);
+                    dist->mute (parent[IDs::Mute]);
                 }
                 else if (ID == IDs::Name)
                 {
-                    calc.getDistributionReference (i)->setDistributionName (parent[IDs::Name]);
+                    dist->setDistributionName (parent[IDs::Name]);
                 }
                 else if (ID == IDs::FundamentalFreq)
                 {
                     if (mapData.hasProperty (IDs::StartFreq)
-                        && parent[ID].operator float() < 20)
-                        calc.getDistributionReference (i)->setFundamentalFreq (parent[ID].operator float()
-                                                                               * mapData[IDs::StartFreq].operator float());
+                        && parent[ID].operator float() < 20
+                        && parent[ID].operator float() > 0)
+                    {
+                        dist->setFundamentalFreq (parent[ID].operator float()
+                                                  * mapData[IDs::StartFreq].operator float());
+                    }
                     else if (parent[ID].operator float() > 0)
-                        calc.getDistributionReference (i)->setFundamentalFreq (parent[ID]);
+                    {
+                        dist->setFundamentalFreq (parent[ID]);
+                    }
                 }
                 else if (ID == IDs::FundamentalAmp)
                 {
                     if (parent[ID].operator float() > 0)
-                        calc.getDistributionReference (i)->setFundamentalAmp (parent[ID]);
+                        dist->setFundamentalAmp (parent[ID]);
                 }
             }
             else if (parent.hasType (IDs::Partial)
@@ -352,7 +522,7 @@ void DissonanceMap::valueTreePropertyChanged (ValueTree& parent, const Identifie
             {
                 OvertoneDistribution* dist = calc.getDistributionReference (i);
                 
-                if (ID == IDs::Freq)
+                if (ID == IDs::Freq && parent[ID].operator float() > 0)
                 {
                     dist->setFreqRatio (parent.getParent().indexOf (parent),
                                         parent[IDs::Freq]);
@@ -374,6 +544,7 @@ void DissonanceMap::valueTreePropertyChanged (ValueTree& parent, const Identifie
         }
     }
 
+    // Redraw the dissonance map (or remove the old map, if new data is needed)
     repaint();
 }
 
@@ -397,9 +568,9 @@ void MapList::resized()
 {
     Rectangle<int> area = getLocalBounds();
     
-    for (int i = 0; i < maps.size(); ++i)
+    for (auto* map : maps)
     {
-        maps[i]->setBounds (area.removeFromTop (mapHeight));
+        map->setBounds (area.removeFromTop (mapHeight));
     }
 }
 
@@ -413,9 +584,6 @@ void MapList::valueTreeChildAdded (ValueTree& parent, ValueTree& newChild)
         addAndMakeVisible (maps.getLast());
         
         setSize (getWidth(), maps.size() * mapHeight);
-        
-        if (getHeight() > getParentHeight())
-            setSize (getWidth(), getHeight() + 35);
     }
 }
 
@@ -432,7 +600,49 @@ void MapList::valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild,
 //==============================================================================
 void MapViewport::visibleAreaChanged (const Rectangle<int>& newVisibleArea)
 {
-    findParentComponentOfClass<DissCalcView>()->repositionDistributionPanel (newVisibleArea.getY());
+    findParentComponentOfClass<DissCalcView>()->repositionCalcPanel (newVisibleArea.getY());
+}
+
+//==============================================================================
+DissMapComponentFooter::DissMapComponentFooter()
+{
+    gridLines.addItem ("lll", 1);
+    gridLines.addItem ("ll", 2);
+    gridLines.addItem ("l", 3);
+    gridLines.addItem (" ", 4);
+    addAndMakeVisible (gridLines);
+    gridLines.addListener (this);
+    gridLines.setTooltip ("Set grid lines");
+    gridLines.setSelectedId (4);
+}
+
+DissMapComponentFooter::~DissMapComponentFooter()
+{
+}
+
+void DissMapComponentFooter::paint (Graphics& g)
+{
+    g.fillAll (Theme::mainBackground);
+
+    g.setColour (Theme::border);
+    g.drawLine (0, 0, getWidth(), 0, 2);
+}
+
+void DissMapComponentFooter::resized()
+{
+    Rectangle<int> area = getLocalBounds();
+    
+    gridLines.setBounds (area.removeFromRight (50));
+}
+
+void DissMapComponentFooter::comboBoxChanged (ComboBox* changedBox)
+{
+    if (changedBox == &gridLines)
+    {
+        data.setProperty (IDs::GridLines, gridLines.getSelectedId(), nullptr);
+    }
+    
+    getParentComponent()->repaint();
 }
 
 //==============================================================================
@@ -442,6 +652,8 @@ DissMapComponent::DissMapComponent()
     addAndMakeVisible (mapView);
     
     mapView.setScrollBarsShown (false, false, true, false);
+    
+    addAndMakeVisible (footer);
 }
 
 DissMapComponent::~DissMapComponent()
@@ -455,13 +667,23 @@ void DissMapComponent::paint (Graphics& g)
 
 void DissMapComponent::resized()
 {
-    mapView.setBounds (getLocalBounds());
+    Rectangle<int> area = getLocalBounds();
+    Rectangle<int> foot = area.removeFromBottom (35);
     
-    if (maps.getHeight() < getHeight())
-        maps.setBounds (getLocalBounds());
+    mapView.setBounds (area.withHeight (area.getHeight() + 1));
+    
+    if (maps.getHeight() < area.getHeight())
+        maps.setBounds (area);
+    
+    maps.setSize (getWidth(), maps.getHeight());
+    
+    footer.setBounds (foot);
 }
 
-void DissMapComponent::setData (ValueTree& calcList)
+void DissMapComponent::setData (ValueTree& calcList, UndoManager& undo)
 {
     maps.mapsData = calcList;
+    maps.undo = &undo;
+    
+    footer.data = calcList;
 }

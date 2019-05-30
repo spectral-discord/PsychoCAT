@@ -18,6 +18,7 @@
 #include "ThemedComponents.h"
 
 //==============================================================================
+// Component that displays and edits partial data
 class PartialEditor   : public Component,
                         public Button::Listener,
                         public TextEditor::Listener,
@@ -27,6 +28,7 @@ public:
     PartialEditor();
     ~PartialEditor();
     
+    // For sorting by ascending frequency
     friend bool operator< (const PartialEditor& first, const PartialEditor& second) noexcept
     {
         return (first.frequencyEditor.getText().getFloatValue()
@@ -36,20 +38,27 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // GUI callbacks
     void buttonClicked (Button* clickedButton) override;
     void textEditorFocusLost (TextEditor& editor) override;
     void textEditorReturnKeyPressed (TextEditor& editor) override;
     
-    void setPartialData (ValueTree& data);
-    ValueTree& getPartialData();
-    
+    // Data model callbacks
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override;
+    
+    // Unused pure-virtual callbacks inhereted from ValueTree::Listener
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override {}
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override {}
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override {}
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
     void valueTreeRedirected (ValueTree& redirectedTree) override {}
     
+    // Get/set the valuetree for the partial's data
+    void setPartialData (ValueTree& data);
+    ValueTree& getPartialData();
+    
+    // Checks if the overtone distribution that this partial belongs to
+    // already contains a partial with the given frequency
     bool containsFreq (float freq);
     
     ThemedTextEditor frequencyEditor, amplitudeEditor;
@@ -62,6 +71,7 @@ private:
 };
 
 //==============================================================================
+// This class enables the sorting of PartialEditor components as well as Partial valuetree nodes
 class PartialComparator
 {
 public:
@@ -83,14 +93,20 @@ public:
         {
             return 1;
         }
-        else if (first->getPartialData()[IDs::Freq]
-            < second->getPartialData()[IDs::Freq])
+        else if (first->getPartialData()[IDs::Freq].operator float()
+            < second->getPartialData()[IDs::Freq].operator float())
         {
+            first->frequencyEditor.setText (first->getPartialData()[IDs::Freq]);
+            second->frequencyEditor.setText (second->getPartialData()[IDs::Freq]);
+
             return -1;
         }
-        else if (first->getPartialData()[IDs::Freq]
-                 > second->getPartialData()[IDs::Freq])
+        else if (first->getPartialData()[IDs::Freq].operator float()
+                 > second->getPartialData()[IDs::Freq].operator float())
         {
+            first->frequencyEditor.setText (first->getPartialData()[IDs::Freq]);
+            second->frequencyEditor.setText (second->getPartialData()[IDs::Freq]);
+            
             return 1;
         }
         
@@ -99,11 +115,11 @@ public:
     
     int compareElements (const ValueTree& first, const ValueTree& second)
     {
-        if (first.getProperty (IDs::Freq) < second.getProperty (IDs::Freq))
+        if (first[IDs::Freq].operator float() < second[IDs::Freq].operator float())
         {
             return -1;
         }
-        else if (first.getProperty (IDs::Freq) > second.getProperty (IDs::Freq))
+        else if (first[IDs::Freq].operator float() > second[IDs::Freq].operator float())
         {
             return 1;
         }
@@ -113,6 +129,11 @@ public:
 };
 
 //==============================================================================
+/*
+    Contains all partials for the currently viewed overtone distribution.
+ 
+    This component goes in a viewport owned by DistributionPanel.
+*/
 class PartialEditorList   : public Component,
                             public ValueTree::Listener
 {
@@ -123,17 +144,17 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
-    void addPartialEditor (ValueTree& newPartialNode);
-    
-    void setDistribution (ValueTree& distributionNode);
-    
+    // Data model callbacks
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override;
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override;
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override;
+    
+    // Unused pure-virtual callbacks inhereted from ValueTree::Listener
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override {}
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
     void valueTreeRedirected (ValueTree& redirectedTree) override {}
     
+    void setDistribution (ValueTree& distributionNode);
     ValueTree distribution;
     
 private:
@@ -146,6 +167,10 @@ private:
 };
 
 //==============================================================================
+/*
+    Simple component that will become visible and reposition when a partial's
+    options button is clicked.
+*/
 class PartialOptions   : public Component
 {
 public:
@@ -164,9 +189,13 @@ private:
 };
 
 //==============================================================================
-
+/*
+    Title bar for the distribution panel.
+ 
+    Contains fundamental freq/amp editors, distribution name editor, and a close panel button.
+*/
 class DistributionPanelTitleBar   : public Component,
-public Button::Listener
+                                    public Button::Listener
 {
 public:
     DistributionPanelTitleBar();
@@ -175,6 +204,7 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // GUI callback
     void buttonClicked (Button* clickedButton) override;
     
     ThemedTextEditor distributionName, fundamentalFreq, fundamentalAmp;
@@ -187,7 +217,9 @@ private:
 };
 
 //==============================================================================
-
+/*
+    Panel for viewing/editing overtone distribution data
+*/
 class DistributionPanel   : public Component,
                             public Button::Listener,
                             public TextEditor::Listener
@@ -199,18 +231,23 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // GUI callbacks
     void buttonClicked (Button* clickedButton) override;
-    
     void textEditorTextChanged (TextEditor& editor) override;
     void textEditorFocusLost (TextEditor& editor) override;
     void textEditorReturnKeyPressed (TextEditor& editor) override;
 
+    // Mouse activity callback
     void mouseDown (const MouseEvent& event) override;
     
+    // Sets and draws the distribution panel's data, slides the panel into position
     void openOptions (PartialEditor* component);
     
+    // Get/set the currently viewed distribution data
     void setDistribution (ValueTree& newDistribution);
     ValueTree& getDistribution();
+    
+    UndoManager* undo;
 
 private:
     DistributionPanelTitleBar titleBar;

@@ -1,10 +1,13 @@
 /*
   ==============================================================================
-
-    ThemedComponents.cpp
-    Created: 24 Apr 2019 10:14:14pm
-    Author:  Lina Reyne
-
+ 
+    This file is part of the Psychotonal CAT (Composition and Analysis Tools) app
+    Copyright (c) 2019 - Spectral Discord
+    http://spectraldiscord.com
+ 
+    This program is provided under the terms of GPL v3
+    https://opensource.org/licenses/GPL-3.0
+ 
   ==============================================================================
 */
 
@@ -36,11 +39,11 @@ ThemedButton::~ThemedButton()
 void ThemedButton::paintButton (Graphics& g, bool drawAsHighlighted, bool drawAsPressed)
 {
     if (! isEnabled())
-    g.fillAll (Theme::buttonDisabled);
+        g.fillAll (Theme::buttonDisabled);
     else if (drawAsHighlighted)
-    g.fillAll (Theme::buttonHighlighted);
+        g.fillAll (Theme::buttonHighlighted);
     else
-    g.fillAll (Theme::mainButton);
+        g.fillAll (Theme::mainButton);
     
     g.setColour (getToggleState() ? Theme::activeText : Theme::text);
     g.setFont (fontSize);
@@ -115,4 +118,17 @@ ThemedComboBox::ThemedComboBox()
 
 ThemedComboBox::~ThemedComboBox()
 {
+}
+
+//==============================================================================
+ThemedToggleButton::ThemedToggleButton()
+{
+    setColour (ToggleButton::textColourId, Theme::text);
+    setColour (ToggleButton::tickColourId, Theme::activeText);
+    setColour (ToggleButton::tickDisabledColourId, Theme::border);
+}
+
+ThemedToggleButton::~ThemedToggleButton()
+{
+    setLookAndFeel (nullptr);
 }

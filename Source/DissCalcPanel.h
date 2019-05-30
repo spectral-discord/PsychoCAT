@@ -18,7 +18,7 @@
 #include "ThemedComponents.h"
 
 //==============================================================================
-
+// Component representing an overtone distribution
 class DistributionComponent   : public Component,
                                 public Button::Listener,
                                 public ValueTree::Listener
@@ -30,16 +30,21 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // GUI callbacks
     void buttonClicked (Button* clickedButton) override;
     void mouseDown (const MouseEvent& event) override;
     
+    // Data model callbacks
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override;
+    
+    // Unused pure-virtual callbacks inhereted from ValueTree::Listener
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override {}
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override {}
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override {}
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
     void valueTreeRedirected (ValueTree& redirectedTree) override {}
     
+    // Get/set the distribution's valuetree node
     void setDistributionData (ValueTree& newDistribution);
     ValueTree& getDistributionData();
     
@@ -51,7 +56,7 @@ private:
 };
 
 //==============================================================================
-
+// This component contains a list of DistributionComponents and is owned by a DissCalc's Viewport
 class DistributionList   : public Component,
                            public ValueTree::Listener
 {
@@ -62,16 +67,22 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
-    void setCalcData (ValueTree& data);
-    ValueTree& getCalcData();
-    
+    // Data model callbacks
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override;
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override;
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override;
+    
+    // Unused pure-virtual callbacks inhereted from ValueTree::Listener
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override {}
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
     void valueTreeRedirected (ValueTree& redirectedTree) override {}
-        
+    
+    // Get/set the valuetree data for this dissonance calc
+    void setCalcData (ValueTree& data);
+    ValueTree& getCalcData();
+    
+    // Returns the total height of the DistributionComponents in this calc
+    // For setting the height of this component and its parent Viewport
     int idealHeight();
     
     ValueTree distributions;
@@ -84,7 +95,10 @@ private:
 };
 
 //==============================================================================
-
+/*
+    Parent component for DistributionList, with GUI controls for deleting and
+    duplicating the entire dissonance calc.
+*/
 class DissCalc   : public Component,
                    public Button::Listener
 {
@@ -95,10 +109,13 @@ public:
     void paint (Graphics& g);
     void resized();
     
+    // GUI callback
     void buttonClicked (Button* clickedButton);
     
+    // Get/set the valuetree data for this dissonance calc
     void setCalcData (ValueTree& distributions);
     ValueTree& getCalcData();
+    
     ThemedButton addDistributionButton, optionsButton;
 
 private:
@@ -110,7 +127,7 @@ private:
 };
 
 //==============================================================================
-
+// Contains a list of DissCalc components, owned by the DissCalcPanel's viewport
 class CalcList   : public Component,
                    public ValueTree::Listener
 {
@@ -121,11 +138,16 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // Get/set the height of the dissonance calcs.
+    // Could be used in the future to enable resizeable dissonance maps/DissCalc objects, if desired.
     void setCalcHeight (int newHeight);
     int getCalcHeight();
     
+    // Data model callbacks
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override;
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override;
+    
+    // Unused pure-virtual callbacks inhereted from ValueTree::Listener
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override {}
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override {}
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
@@ -141,7 +163,7 @@ private:
 };
 
 //==============================================================================
-
+// Component for various DistributionComponent controls
 class DistributionOptions   : public Component
 {
 public:
@@ -151,13 +173,16 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
-    ThemedButton removeButton, duplicateButton, setXAxisButton, setFromSavedButton;
+    ThemedButton removeButton, duplicateButton, setXAxisButton, setFromSavedButton, saveButton;
     DistributionComponent* distribution;
     
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DistributionOptions)
 };
 
+// Component for various DissCalc controls
+// Should combine with the above DistributionOptions to satisfy DRY
+// -------------- A better solution is a later Lina problem! --------------
 class CalcOptions   : public DistributionOptions
 {
 public:
@@ -185,7 +210,7 @@ private:
 };
 
 //==============================================================================
-
+// Panel for viewing/manipulating overtone distributions
 class DissCalcPanel   : public Component,
                         public Button::Listener
 {
@@ -196,16 +221,22 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // GUI callbacks
     void buttonClicked (Button* clickedButton) override;
+    
+    // Mouse event callbacks
     void mouseDown (const MouseEvent& event) override;
     
+    // For setting the top-level valuetree node for dissonance calculations
     void setCalcData (ValueTree& calcData);
     
+    // Opens the options components for distributions or dissonance calcs
     void openOptions (DistributionComponent* component);
     void openOptions (DissCalc* calc);
     
     Viewport view;
-
+    UndoManager* undo;
+    
 private:
     CalcList calcs;
     

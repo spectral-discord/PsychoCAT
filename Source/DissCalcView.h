@@ -17,12 +17,15 @@
 #include "DissMapComponent.h"
 #include "DissCalcPanel.h"
 #include "DistributionPanel.h"
+#include "SaveDistributionWindow.h"
+#include "SavedDistributionsList.h"
 
 //==============================================================================
 /*
-    This class creates the GUI view and controls when calculating dissonance and creating dissonance maps.
+    This class creates the GUI view and controls when calculating dissonances and creating dissonance maps.
 */
-class DissCalcView   : public Component
+class DissCalcView   : public Component,
+                       public KeyListener
 {
 public:
     DissCalcView();
@@ -31,13 +34,20 @@ public:
     void paint (Graphics& g) override;
     void resized() override;
     
+    // Sets the top-level valuetree node to hold all dissonance calculation data
     void setData (ValueTree& data);
     
     void openDistributionPanel (ValueTree& distributionToOpen);
-    ValueTree& getDistributionPanelData();
     void closeDistributionPanel();
+    bool distributionPanelIsOpen();
+    ValueTree& getDistributionPanelData();
     
-    void repositionDistributionPanel (int height);
+    void repositionCalcPanel (int height);
+    
+    bool keyPressed (const KeyPress& key, Component* originatingComponent) override;
+    
+    SaveDistributionWindow saveDistribution;
+    SavedDistributionsList savedDistributionList;
     
 private:
     DissCalcPanel calcPanel;
@@ -45,6 +55,9 @@ private:
     DissMapComponent mapComponent;
     
     ValueTree calcData;
+    UndoManager undo;
+    
+    TooltipWindow tips;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DissCalcView)
 };

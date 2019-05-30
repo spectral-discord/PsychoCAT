@@ -49,6 +49,7 @@ PartialEditor::PartialEditor()   : partial (IDs::Partial)
     optionsButton.setBorders (true, true, true, true, 2);
     
     muteButton.setButtonText ("M");
+    muteButton.setTooltip ("Mute");
     addAndMakeVisible (muteButton);
     muteButton.addListener (this);
     muteButton.setBorders (true, false, true, true, 2);
@@ -112,55 +113,54 @@ void PartialEditor::textEditorFocusLost (TextEditor& editor)
     {
         if (! containsFreq (editor.getText().getFloatValue()))
         {
-            partial.setProperty (IDs::Freq, editor.getTextValue().getValue(), nullptr);         // Set undo manager
+            // Check if it's the first entry of a freq value so an initial value isn't undone
+            // Prevents partial freqs/amps from being set to 0
+            if (partial[IDs::Freq].operator float() > 0)
+            {
+                findParentComponentOfClass<DistributionPanel>()->undo->beginNewTransaction();
+
+                partial.setProperty (IDs::Freq, editor.getTextValue().getValue(),
+                                     findParentComponentOfClass<DistributionPanel>()->undo);
+            }
+            else
+            {
+                partial.setProperty (IDs::Freq, editor.getTextValue().getValue(), nullptr);
+            }
         }
         else
         {
-            // Popup warning that another partial contains the input frequency
+            // TODO: Popup warning that another partial contains the input frequency
             editor.setText (partial[IDs::Freq].toString());
         }
     }
     else if (&editor == &amplitudeEditor
              && editor.getTextValue() != partial[IDs::Amp])
     {
-        partial.setProperty (IDs::Amp, editor.getTextValue().getValue(), nullptr);              // Set undo manager
+        if (partial[IDs::Amp].operator float() > 0)
+        {
+            findParentComponentOfClass<DistributionPanel>()->undo->beginNewTransaction();
+            
+            partial.setProperty (IDs::Amp, editor.getTextValue().getValue(),
+                                 findParentComponentOfClass<DistributionPanel>()->undo);
+        }
+        else
+        {
+            partial.setProperty (IDs::Amp, editor.getTextValue().getValue(), nullptr);
+        }
     }
 }
 
 void PartialEditor::textEditorReturnKeyPressed (TextEditor& editor)
 {
-    /*
-    if (&editor == &frequencyEditor
-        && editor.getTextValue() != partial[IDs::Freq])
-    {
-        if (! containsFreq (editor.getText().getFloatValue()))
-        {
-            partial.setProperty (IDs::Freq, editor.getTextValue().getValue(), nullptr);         // Set undo manager
-        }
-        else
-        {
-            // Popup warning that another partial contains the input frequency
-            editor.setText (partial[IDs::Freq].toString());
-        }
-    }
-    else if (&editor == &amplitudeEditor
-             && editor.getTextValue() != partial[IDs::Amp])
-    {
-        partial.setProperty (IDs::Amp, editor.getTextValue().getValue(), nullptr);              // Set undo manager
-    }
-    */
     unfocusAllComponents();
 }
 
 bool PartialEditor::containsFreq (float freq)
 {
-    ValueTree distribution = partial.getParent();
-    
-    for (int i = 0; i < distribution.getNumChildren(); ++i)
+    for (auto child : partial.getParent())
     {
-        float thisFreq = distribution.getChild (i)[IDs::Freq];
-        
-        if ((thisFreq == freq && distribution.getChild (i).hasType (IDs::Partial))
+        if ((child[IDs::Freq].operator float() == freq
+             && child.hasType (IDs::Partial))
             || freq == 1.0
             || freq <= 0)
         {
@@ -197,9 +197,9 @@ PartialEditorList::PartialEditorList()   : distribution (IDs::OvertoneDistributi
 {
     distribution.addListener (this);
     
-    for (int i = 0; i < distribution.getNumChildren(); ++i)
+    for (auto partial : distribution)
     {
-        distribution.getChild (i).addListener (this);
+        partial.addListener (this);
     }
         
     editorHeight = 30;
@@ -221,8 +221,8 @@ void PartialEditorList::resized()
 {
     Rectangle<int> area = getLocalBounds();
         
-    for (int i = 0; i < partialEditors.size(); ++i)
-        partialEditors[i]->setBounds (area.removeFromTop (editorHeight).reduced (1, 0));
+    for (auto* editor : partialEditors)
+        editor->setBounds (area.removeFromTop (editorHeight).reduced (1, 0));
 }
 
 void PartialEditorList::valueTreePropertyChanged (ValueTree& parent, const Identifier& ID)
@@ -232,8 +232,15 @@ void PartialEditorList::valueTreePropertyChanged (ValueTree& parent, const Ident
         if (parent == distribution.getChild (i) && ID == IDs::Freq)
         {
             partialEditors.sort (comparator);
+            
             resized();
-                                    
+            
+            return;
+        }
+        else if (parent == distribution.getChild (i) && ID == IDs::Amp)
+        {
+            partialEditors[i]->amplitudeEditor.setText (distribution.getChild (i)[ID]);
+
             return;
         }
         else if (parent == distribution.getChild (i) && ID == IDs::Mute)
@@ -260,6 +267,13 @@ void PartialEditorList::valueTreeChildAdded (ValueTree& parent, ValueTree& newCh
         newChild.addListener (this);
         partialEditors.getLast()->setPartialData (newChild);
         
+        if (newChild[IDs::Freq])
+        {
+            partialEditors.getLast()->frequencyEditor.setText (newChild[IDs::Freq]);
+            partialEditors.getLast()->amplitudeEditor.setText (newChild[IDs::Amp]);
+            partialEditors.sort (comparator);
+        }
+        
         setSize (getWidth(), partialEditors.size() * editorHeight);
     }
 }
@@ -269,10 +283,10 @@ void PartialEditorList::valueTreeChildRemoved (ValueTree& parent, ValueTree& rem
     if (parent == distribution
         && removedChild.hasType (IDs::Partial))
     {
-        for (int i = 0; i < partialEditors.size(); ++i)
+        for (auto* editor : partialEditors)
         {
-            if (partialEditors[i]->getPartialData() == removedChild)
-                partialEditors.remove (i);
+            if (editor->getPartialData() == removedChild)
+                partialEditors.removeObject (editor);
         }
         
         setSize (getWidth(), partialEditors.size() * editorHeight);
@@ -285,22 +299,20 @@ void PartialEditorList::setDistribution (ValueTree& distributionNode)
     
     partialEditors.clear();
     
-    for (int i = 0; i < distribution.getNumChildren(); ++i)
+    for (auto partial : distribution)
     {
-        if (distribution.getChild (i).hasType (IDs::Partial))
+        if (partial.hasType (IDs::Partial))
         {
-            ValueTree partialNode = distribution.getChild (i);
-            
             partialEditors.add (new PartialEditor());
             addAndMakeVisible (partialEditors.getLast());
             
-            partialEditors.getLast()->setPartialData (partialNode);
+            partialEditors.getLast()->setPartialData (partial);
             partialEditors.getLast()->getPartialData().addListener (this);
             
-            partialEditors.getLast()->frequencyEditor.setText (partialNode[IDs::Freq]);
-            partialEditors.getLast()->amplitudeEditor.setText (partialNode[IDs::Amp]);
+            partialEditors.getLast()->frequencyEditor.setText (partial[IDs::Freq]);
+            partialEditors.getLast()->amplitudeEditor.setText (partial[IDs::Amp]);
             
-            if (partialNode[IDs::Mute])
+            if (partial[IDs::Mute])
                 partialEditors.getLast()->muteButton.setToggleState (true,
                                                                      dontSendNotification);
         }
@@ -323,20 +335,23 @@ DistributionPanelTitleBar::DistributionPanelTitleBar()   : collapseButton ("Coll
     collapseButton.setShape (arrowShape, false, true, false);
     collapseButton.setBorderSize (BorderSize<int> (5));
     collapseButton.addListener (this);
-    
+    addAndMakeVisible (collapseButton);
+
     distributionName.setBordered (false);
     distributionName.setTextToShowWhenEmpty ("Untitled", Theme::border);
-    
-    addAndMakeVisible (collapseButton);
+    distributionName.setInputRestrictions (30, String ("abcdefghijklmnopqrstuvwxyz1234567890")
+                                           + String ("ABCDEFGHIJKLMNOPQRSTUVWXYZ _-'"));
     addAndMakeVisible (distributionName);
     
     fundamentalFreq.setTextToShowWhenEmpty ("Freq", Theme::border);
     fundamentalFreq.setInputRestrictions (10, "1234567890.");
+    fundamentalFreq.setTooltip ("Sets the fundamental frequency");
     fundamentalFreq.setFont (16.f);
     addAndMakeVisible (fundamentalFreq);
     
     fundamentalAmp.setTextToShowWhenEmpty ("Amp", Theme::border);
     fundamentalAmp.setInputRestrictions (10, "1234567890.");
+    fundamentalAmp.setTooltip ("Sets the fundamental amplitude");
     fundamentalAmp.setFont (16.f);
     addAndMakeVisible (fundamentalAmp);
 }
@@ -355,14 +370,27 @@ void DistributionPanelTitleBar::paint (Graphics& g)
     
     g.setColour (Theme::text);
     g.setFont (16.0f);
-    g.drawText ("Freq", 0, 25, getWidth() / 2 - 6, 25, Justification::centred);
-    g.drawText ("Amp", getWidth() / 2 - 10, 25, getWidth() / 2 - 6, 25, Justification::centred);
+    g.drawText ("Fundamental", 0, 25, getWidth(), 25, Justification::centred);
+    
+    g.setFont (14.0f);
+    g.drawText ("Freq", 0, 42, getWidth() / 2 - 6, 25, Justification::centred);
+    g.drawText ("Amp", getWidth() / 2 - 10, 42, getWidth() / 2 - 6, 25, Justification::centred);
+    
+    if (findParentComponentOfClass<DistributionPanel>()->getDistribution().getNumChildren() > 0)
+    {
+        g.setColour (Theme::border);
+        g.drawLine (10, getHeight() - 25, getWidth() - 10, getHeight() - 25);
+        
+        g.setFont (16.0f);
+        g.setColour (Theme::text);
+        g.drawText ("Overtones", 0, getHeight() - 25, getWidth(), 25, Justification::centred);
+    }
 }
 
 void DistributionPanelTitleBar::resized()
 {
     Rectangle<int> area = getLocalBounds().removeFromTop (25);
-    Rectangle<int> fundamentalArea = getLocalBounds().removeFromBottom (30).reduced (2, 0);
+    Rectangle<int> fundamentalArea = getLocalBounds().removeFromBottom (60).removeFromTop (30).reduced (2, 0);
     fundamentalArea.removeFromRight (15);
     
     collapseButton.setBounds (area.removeFromRight (area.getHeight() * 1.4));
@@ -421,7 +449,7 @@ void DistributionPanel::paint (Graphics& g)
 void DistributionPanel::resized()
 {
     Rectangle<int> area = getLocalBounds();
-    Rectangle<int> header = area.removeFromTop (80);
+    Rectangle<int> header = area.removeFromTop (125);
     Rectangle<int> footer = area.removeFromBottom (35);
     
     titleBar.setBounds (header);
@@ -446,11 +474,15 @@ void DistributionPanel::setDistribution (ValueTree& newDistribution)
         {
             titleBar.fundamentalFreq.setEnabled (false);
             titleBar.fundamentalFreq.setText ("X-Axis");
+            titleBar.fundamentalFreq.setTooltip (String ("The fundamental frequency of this note\n")
+                                                 + String ("cannot be set explicitly - it will change as it\n")
+                                                 + String ("moves across the X-axis of the dissonance map."));
         }
         else if (! titleBar.fundamentalFreq.isEnabled())
         {
             titleBar.fundamentalFreq.setEnabled (true);
             titleBar.fundamentalFreq.setText (getDistribution()[IDs::FundamentalFreq]);
+            titleBar.fundamentalFreq.setTooltip ("Sets the fundamental frequency");
         }
     }
 }
@@ -464,12 +496,17 @@ void DistributionPanel::buttonClicked (Button* clickedButton)
 {
     if (clickedButton == &addButton)
     {
-        partialList.distribution.appendChild (ValueTree (IDs::Partial), nullptr);          // Set undo manager
+        undo->beginNewTransaction();
+        partialList.distribution.appendChild (ValueTree (IDs::Partial), undo);
     }
     else if (clickedButton == &options.removeButton)
     {
-        partialList.distribution.removeChild (options.partial->getPartialData(),
-                                              nullptr);
+        undo->beginNewTransaction();
+        options.partial->getPartialData().setProperty (IDs::Freq,
+                                                       options.partial->getPartialData()[IDs::Freq],
+                                                       undo);
+        
+        partialList.distribution.removeChild (options.partial->getPartialData(), undo);
         
         options.setVisible (false);
         options.partial = nullptr;
@@ -481,9 +518,9 @@ void DistributionPanel::textEditorTextChanged (TextEditor& editor)
     if (&editor == &titleBar.distributionName)
     {
         if (editor.isEmpty())
-        getDistribution().removeProperty (IDs::Name, nullptr);
+            getDistribution().removeProperty (IDs::Name, nullptr);
         else
-        getDistribution().setProperty (IDs::Name, editor.getTextValue().toString(), nullptr);
+            getDistribution().setProperty (IDs::Name, editor.getTextValue().toString(), nullptr);
     }
 }
 
@@ -492,20 +529,25 @@ void DistributionPanel::textEditorFocusLost (TextEditor& editor)
     if (&editor == &titleBar.distributionName)
     {
         if (editor.isEmpty())
-        getDistribution().removeProperty (IDs::Name, nullptr);
+            getDistribution().removeProperty (IDs::Name, nullptr);
     }
     else if (&editor == &titleBar.fundamentalFreq)
     {
+        undo->beginNewTransaction();
+
         if (editor.getTextValue() > 0)
             getDistribution().setProperty (IDs::FundamentalFreq,
                                            editor.getTextValue(),
-                                           nullptr);
+                                           undo);
     }
     else if (&editor == &titleBar.fundamentalAmp)
     {
-        getDistribution().setProperty (IDs::FundamentalAmp,
-                                       editor.getTextValue(),
-                                       nullptr);
+        undo->beginNewTransaction();
+
+        if (editor.getTextValue() > 0)
+            getDistribution().setProperty (IDs::FundamentalAmp,
+                                           editor.getTextValue(),
+                                           undo);
     }
 }
 

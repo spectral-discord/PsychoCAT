@@ -20,17 +20,20 @@ DistributionOptions::DistributionOptions()
 {
     duplicateButton.setButtonText ("Duplicate");
     setXAxisButton.setButtonText ("Set as X-Axis");
-    setFromSavedButton.setButtonText ("Set Distribution");
+    setFromSavedButton.setButtonText ("Set Timbre");
+    saveButton.setButtonText ("Save Timbre");
     removeButton.setButtonText ("Remove");
     
     duplicateButton.setBorders (true, true, true, true, 2);
     setXAxisButton.setBorders (true, false, true, true, 2);
     setFromSavedButton.setBorders (true, false, true, true, 2);
+    saveButton.setBorders (true, false, true, true, 2);
     removeButton.setBorders (true, false, true, true, 2);
 
     addAndMakeVisible (duplicateButton);
     addAndMakeVisible (setXAxisButton);
     addAndMakeVisible (setFromSavedButton);
+    addAndMakeVisible (saveButton);
     addAndMakeVisible (removeButton);
     
     distribution = nullptr;
@@ -49,11 +52,12 @@ void DistributionOptions::paint (Graphics& g)
 void DistributionOptions::resized()
 {
     Rectangle<int> area = getLocalBounds().reduced (1);
-    int buttonHeight = getHeight() / 4;
+    int buttonHeight = getHeight() / 5;
     
     duplicateButton.setBounds (area.removeFromTop (buttonHeight));
     setXAxisButton.setBounds (area.removeFromTop (buttonHeight));
     setFromSavedButton.setBounds (area.removeFromTop (buttonHeight));
+    saveButton.setBounds (area.removeFromTop (buttonHeight));
     removeButton.setBounds (area);
 }
 
@@ -66,11 +70,10 @@ DistributionComponent::DistributionComponent()   : distribution (IDs::OvertoneDi
     optionsButton.setBorders (true, false, true, true, 2);
     
     muteButton.setButtonText ("M");
+    muteButton.setTooltip ("Mute");
     addAndMakeVisible (muteButton);
     muteButton.addListener (this);
     muteButton.setBorders (true, false, true, true, 2);
-
-    addMouseListener (getTopLevelComponent(), true);
     
     distribution.addListener (this);
 }
@@ -81,6 +84,7 @@ DistributionComponent::~DistributionComponent()
 
 void DistributionComponent::paint (Graphics& g)
 {
+    // Highlight distribution if being viewed via DistributionPanel
     g.fillAll (distribution[IDs::IsViewed]
                ? Theme::buttonHighlighted
                : Theme::mainBackground);
@@ -89,11 +93,15 @@ void DistributionComponent::paint (Graphics& g)
     g.drawLine (0, getHeight(), getWidth(), getHeight(), 2);
     g.drawLine (getWidth(), 0, getWidth(), getHeight(), 2);
 
+    // Draw distribution name
     g.setColour (Theme::text);
     g.setFont (16.0f);
     g.drawText (distribution.getProperty (IDs::Name, "Untitled"),
                 getLocalBounds().removeFromLeft (getWidth() - getHeight()).withX (getHeight() / 2),
                 Justification::centredLeft, true);
+    
+    muteButton.setEnabled (distribution[IDs::XAxis] ? false : true);
+    muteButton.setButtonText (distribution[IDs::XAxis] ? "X" : "M");
 }
 
 void DistributionComponent::resized()
@@ -121,9 +129,14 @@ void DistributionComponent::buttonClicked (Button* clickedButton)
 
 void DistributionComponent::mouseDown (const MouseEvent& event)
 {
+    // Open the distribution panel and set it with the clicked distribution component's data
     if (event.eventComponent == this)
     {
-        findParentComponentOfClass<DissCalcView>()->openDistributionPanel (distribution);
+        if (findParentComponentOfClass<DissCalcView>()->distributionPanelIsOpen()
+            && distribution == findParentComponentOfClass<DissCalcView>()->getDistributionPanelData())
+            findParentComponentOfClass<DissCalcView>()->closeDistributionPanel();
+        else
+            findParentComponentOfClass<DissCalcView>()->openDistributionPanel (distribution);
     }
 }
 
@@ -160,6 +173,12 @@ void DistributionComponent::valueTreePropertyChanged (ValueTree& parent,
     }
     else  if (parent == distribution && ID == IDs::XAxis)
     {
+        /*
+            Disable the mute button for the distribution that traverses the x-axis.
+        
+            If muted, all other distributions would have a static frequency,
+            and the map would just be a horizontal line.
+        */
         muteButton.setEnabled (distribution[IDs::XAxis] ? false : true);
         muteButton.setButtonText (distribution[IDs::XAxis] ? "X" : "M");
     }
@@ -190,9 +209,9 @@ void DistributionList::resized()
 {
     Rectangle<int> area = getLocalBounds();
     
-    for (int i = 0; i < distributionComponents.size(); ++i)
+    for (auto* component : distributionComponents)
     {
-        distributionComponents[i]->setBounds (area.removeFromTop (distributionHeight));
+        component->setBounds (area.removeFromTop (distributionHeight));
     }
 }
 
@@ -210,6 +229,7 @@ void DistributionList::valueTreeChildAdded (ValueTree& parent, ValueTree& newChi
 {
     if (parent == distributions && newChild.hasType (IDs::OvertoneDistribution))
     {
+        // Create distribution component and set its data as the added valuetree
         distributionComponents.add (new DistributionComponent());
         distributionComponents.getLast()->setDistributionData (newChild);
         addAndMakeVisible (distributionComponents.getLast());
@@ -218,11 +238,23 @@ void DistributionList::valueTreeChildAdded (ValueTree& parent, ValueTree& newChi
         
         setSize (getWidth(), idealHeight());
         
+        // Ensures that some distribution is always set as the x-axis/variable distribution
         if (distributionComponents.size() == 1)
+        {
             newChild.setProperty (IDs::XAxis, true, nullptr);
+        }
+        else if (newChild[IDs::XAxis].operator bool()
+                 && parent.getChildWithProperty (IDs::XAxis, true) != newChild)
+        {
+            parent.getChildWithProperty (IDs::XAxis, true).setProperty (IDs::XAxis,
+                                                                        false, nullptr);
+        }
         
-        newChild.setProperty (IDs::FundamentalFreq, 1, nullptr);
-        newChild.setProperty (IDs::FundamentalAmp, 1, nullptr);
+        // Ensures that fundamental freqs/amps aren't initialized with illegal values
+        if (newChild[IDs::FundamentalAmp].operator float() <= 0
+            || newChild[IDs::FundamentalFreq].operator float() <= 0)
+            newChild.setProperty (IDs::FundamentalFreq, 1, nullptr);
+            newChild.setProperty (IDs::FundamentalAmp, 1, nullptr);
     }
 }
 
@@ -248,6 +280,7 @@ void DistributionList::valueTreeChildOrderChanged (ValueTree& parent, int oldInd
 
 int DistributionList::idealHeight()
 {
+    // For resizing the viewport containing this DistributionList
     return distributionComponents.size() * distributionHeight;
 }
 
@@ -295,6 +328,7 @@ void DissCalc::resized()
     
     view.setBounds (area);
     
+    // Only resize the distribution list if it is larger than the viewport
     if (distributionList.getHeight() < area.getHeight())
         distributionList.setBounds (area);
 }
@@ -303,8 +337,10 @@ void DissCalc::buttonClicked (Button* clickedButton)
 {
     if (clickedButton == &addDistributionButton)
     {
+        findParentComponentOfClass<DissCalcPanel>()->undo->beginNewTransaction();
+        
         distributionList.distributions.appendChild (ValueTree (IDs::OvertoneDistribution),
-                                                    nullptr);         // set undo manaager
+                                                    findParentComponentOfClass<DissCalcPanel>()->undo);
     }
     else if (clickedButton == &optionsButton)
     {
@@ -347,9 +383,9 @@ void CalcList::resized()
 {
     Rectangle<int> area = getLocalBounds();
     
-    for (int i = 0; i < calcs.size(); ++i)
+    for (auto* calc : calcs)
     {
-        calcs[i]->setBounds (area.removeFromTop (calcHeight));
+        calc->setBounds (area.removeFromTop (calcHeight));
     }
 }
 
@@ -401,10 +437,11 @@ DissCalcPanel::DissCalcPanel()
     addCalcButton.setFontSize (26);
     
     addChildComponent (options);
-    options.setSize (100, 100);
+    options.setSize (100, 125);
     options.duplicateButton.addListener (this);
     options.setXAxisButton.addListener (this);
     options.setFromSavedButton.addListener (this);
+    options.saveButton.addListener (this);
     options.removeButton.addListener (this);
     
     addChildComponent (calcOptions);
@@ -434,6 +471,7 @@ void DissCalcPanel::resized()
     Rectangle<int> footer = area.removeFromBottom (35);
     
     view.setBounds (area.withHeight (area.getHeight() - 1));
+    
     if (calcs.getHeight() < area.getHeight() - 1)
         calcs.setBounds (area.withHeight (area.getHeight() - 1));
     
@@ -444,18 +482,22 @@ void DissCalcPanel::buttonClicked (Button* clickedButton)
 {
     if (clickedButton == &addCalcButton)
     {
-        calcs.dissonanceCalcs.appendChild (ValueTree (IDs::Calculator), nullptr);            // Set undo manager
+        undo->beginNewTransaction();
         
+        calcs.dissonanceCalcs.appendChild (ValueTree (IDs::Calculator), undo);
+        
+        // Init the new dissonance calc with a distribution
         ValueTree newCalc = calcs.dissonanceCalcs.getChild (calcs.dissonanceCalcs.getNumChildren() - 1);
-        newCalc.appendChild (ValueTree (IDs::OvertoneDistribution), nullptr);
-        newCalc.getChild (0).setProperty (IDs::FundamentalFreq, 1, nullptr);
-        newCalc.getChild (0).setProperty (IDs::FundamentalAmp, 1, nullptr);
+        newCalc.appendChild (ValueTree (IDs::OvertoneDistribution), undo);
+        newCalc.getChild (0).setProperty (IDs::FundamentalFreq, 1, undo);
+        newCalc.getChild (0).setProperty (IDs::FundamentalAmp, 1, undo);
     }
     else if (clickedButton == &options.duplicateButton)
     {
         ValueTree tree = options.distribution->getDistributionData().createCopy();
         ValueTree parent = options.distribution->distribution.getParent();
         
+        // Reset these properties, if used by the distribution being copied
         if (tree[IDs::XAxis])
             tree.setProperty (IDs::XAxis, false, nullptr);
         
@@ -465,18 +507,19 @@ void DissCalcPanel::buttonClicked (Button* clickedButton)
         if (tree[IDs::IsViewed])
             tree.setProperty (IDs::IsViewed, false, nullptr);
         
-        for (int i = 0; i < tree.getNumChildren(); ++i)
+        // Don't copy any partials with incomplete data
+        for (auto child : tree)
         {
-            if (tree.getChild (i).hasType (IDs::Partial)
-                && (tree.getChild (i)[IDs::Freq].operator float() <= 0
-                    || tree.getChild (i)[IDs::Amp].operator float() <= 0))
+            if (child.hasType (IDs::Partial)
+                && (child[IDs::Freq].operator float() <= 0
+                    || child[IDs::Amp].operator float() <= 0))
             {
-                tree.removeChild (i, nullptr);
-                i -= 1;
+                tree.removeChild (child, nullptr);
             }
         }
 
-        parent.addChild (tree, -1, nullptr);
+        undo->beginNewTransaction();
+        parent.appendChild (tree, undo);
         
         options.setVisible (false);
         options.distribution->optionsButton.setToggleState (false, dontSendNotification);
@@ -484,31 +527,40 @@ void DissCalcPanel::buttonClicked (Button* clickedButton)
     else if (clickedButton == &options.setXAxisButton)
     {
         ValueTree parent = options.distribution->distribution.getParent();
-
-        for (int i = 0; i < parent.getNumChildren(); ++i)
-        {
-            if (parent.getChild (i).getProperty (IDs::XAxis, false))
-            {
-                parent.getChild (i).setProperty (IDs::XAxis, false, nullptr);       // Set undo manager
-            }
-        }
         
-        options.distribution->distribution.setProperty (IDs::XAxis,
-                                                        true, nullptr);             // Set undo manager
+        undo->beginNewTransaction();
+        parent.getChildWithProperty (IDs::XAxis, true).setProperty (IDs::XAxis, false, undo);
+        options.distribution->distribution.setProperty (IDs::XAxis, true, undo);
         
         options.setVisible (false);
         options.distribution->optionsButton.setToggleState (false, dontSendNotification);
         
         DissCalcView& view = *findParentComponentOfClass<DissCalcView>();
         
-        if (options.distribution->distribution.getProperty (IDs::IsViewed, false))
-            view.openDistributionPanel (options.distribution->distribution);
-        else if (options.distribution->distribution != view.getDistributionPanelData())
-            view.openDistributionPanel (view.getDistributionPanelData());
+        // Update the distribution panel if the viewed distribution is the new x-axis distribution
+        if (view.distributionPanelIsOpen())
+        {
+            if (options.distribution->distribution.getProperty (IDs::IsViewed, false))
+                view.openDistributionPanel (options.distribution->distribution);
+            else if (options.distribution->distribution != view.getDistributionPanelData())
+                view.openDistributionPanel (view.getDistributionPanelData());
+        }
     }
     else if (clickedButton == &options.setFromSavedButton)
     {
-        // Use popup to display saved distributions
+        DissCalcView* view = findParentComponentOfClass<DissCalcView>();
+        
+        view->savedDistributionList.show (options.distribution->distribution);
+        view->closeDistributionPanel();
+        
+        options.setVisible (false);
+        options.distribution->optionsButton.setToggleState (false, dontSendNotification);
+    }
+    else if (clickedButton == &options.saveButton)
+    {
+        DissCalcView* view = findParentComponentOfClass<DissCalcView>();
+        
+        view->saveDistribution.show (options.distribution->distribution);
         
         options.setVisible (false);
         options.distribution->optionsButton.setToggleState (false, dontSendNotification);
@@ -520,11 +572,14 @@ void DissCalcPanel::buttonClicked (Button* clickedButton)
         if (options.distribution->distribution.getProperty (IDs::IsViewed, false))
             findParentComponentOfClass<DissCalcView>()->closeDistributionPanel();
         
-        parent.removeChild (options.distribution->distribution, nullptr);
+        undo->beginNewTransaction();
+        parent.removeChild (options.distribution->distribution, undo);
         
+        // Sets the first distribution as the x-axis distribution,
+        // if the x-axis distribution is being removed.
         if (parent.getNumChildren() > 0
             && ! parent.getChildWithProperty (IDs::XAxis, true).isValid())
-            parent.getChild (0).setProperty (IDs::XAxis, true, nullptr);
+            parent.getChild (0).setProperty (IDs::XAxis, true, undo);
         
         options.setVisible (false);
         options.distribution = nullptr;
@@ -535,50 +590,34 @@ void DissCalcPanel::buttonClicked (Button* clickedButton)
         ValueTree parent = calcOptions.calc->getCalcData().getParent();
         ValueTree treeToCopy = calcOptions.calc->getCalcData();
         
-        parent.addChild (tree, -1, nullptr);
-        
-        for (int i = 0; i < treeToCopy.getNumChildren(); ++i)
-        {
-            if (treeToCopy.getChild (i).hasType (IDs::OvertoneDistribution))
-            {
-                tree.addChild (treeToCopy.getChild (i).createCopy(), -1, nullptr);
-                
-                if (tree.getChild (i)[IDs::IsViewed])
-                    tree.getChild (i).removeProperty (IDs::IsViewed, nullptr);
-            }
-            
-            for (int j = 0; j < tree.getChild (i).getNumChildren(); ++j)
-            {
-                if (tree.getChild (i).getChild (j).hasType (IDs::Partial)
-                    && (! tree.getChild (i).getChild (j).hasProperty (IDs::Freq)
-                        || ! tree.getChild (i).getChild (j).hasProperty (IDs::Amp)))
-                {
-                    tree.getChild (i).removeChild (j, nullptr);
-                    j -= 1;
-                }
-            }
-        }
+        parent.appendChild (tree, nullptr);
+        tree.copyPropertiesAndChildrenFrom (treeToCopy, nullptr);
         
         calcOptions.setVisible (false);
         calcOptions.calc->optionsButton.setToggleState (false, dontSendNotification);
     }
     else if (clickedButton == &calcOptions.removeButton)
     {
-        ValueTree parent = calcOptions.calc->getCalcData().getParent();
-        
-        parent.removeChild (calcOptions.calc->getCalcData(), nullptr);
+        ValueTree calc = calcOptions.calc->getCalcData();
+
+        undo->beginNewTransaction();
+        calc.removeAllChildren (undo);
+        calc.removeAllProperties (undo);
+        calc.getParent().removeChild (calc, undo);
         
         calcOptions.setVisible (false);
         calcOptions.calc = nullptr;
     }
 }
 
+// Hide the options components on click
 void DissCalcPanel::mouseDown (const MouseEvent& event)
 {
     if (options.isVisible()
         && event.eventComponent != &options.duplicateButton
         && event.eventComponent != &options.setXAxisButton
         && event.eventComponent != &options.setFromSavedButton
+        && event.eventComponent != &options.saveButton
         && event.eventComponent != &options.removeButton
         && event.eventComponent != &options.distribution->optionsButton)
     {
@@ -616,16 +655,19 @@ void DissCalcPanel::openOptions (DistributionComponent* component)
         return;
     }
     
-    // Enable or disable XAxisand Remove buttons, if needed
+    // Enable or disable XAxis button, if needed
     if (component->getDistributionData().getProperty (IDs::XAxis, false))
+    {
         options.setXAxisButton.setEnabled (false);
+        options.setXAxisButton.setTooltip (String ("This timbre is already set to have a variable fundamental ")
+                                           + String ("frequency represented by the x-axis."));
+    }
     else if (! options.setXAxisButton.isEnabled())
+    {
         options.setXAxisButton.setEnabled (true);
-
-    if (component->getDistributionData().getParent().getNumChildren() == 1)
-        options.removeButton.setEnabled (false);
-    else if (! options.removeButton.isEnabled())
-        options.removeButton.setEnabled (true);
+        options.setXAxisButton.setTooltip (String ("Sets this timbre to have a variable fundamental ")
+                                           + String ("frequency represented by the x-axis."));
+    }
     
     // Setup options
     options.distribution = component;

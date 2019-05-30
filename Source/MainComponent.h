@@ -14,7 +14,6 @@
 #pragma once
 
 #include "../JuceLibraryCode/JuceHeader.h"
-#include "DisMAL/DisMAL.h"
 #include "DissCalcView.h"
 
 //==============================================================================
@@ -42,6 +41,8 @@ private:
     //==============================================================================
     ValueTree calcData;
     DissCalcView calcView;
-    
+    ApplicationProperties settings;
+    PropertiesFile::Options options;
+        
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
