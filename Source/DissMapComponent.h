@@ -45,6 +45,7 @@ public:
     void textEditorFocusLost (TextEditor& editor) override;
     void textEditorReturnKeyPressed (TextEditor& editor) override;
     void buttonClicked (Button* clickedButton) override;
+    void mouseMove (const MouseEvent& event) override;
     
     // Data model callbacks to set DisMAL data
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override;
@@ -67,6 +68,8 @@ private:
     NormalisableRange<float> normalizer, denormalizer;
     
     PartialComparator comparator;
+    
+    bool mapNeedsRedrawn;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DissonanceMap)
 };

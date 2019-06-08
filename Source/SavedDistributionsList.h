@@ -38,6 +38,7 @@ public:
     void textEditorTextChanged (TextEditor& editor) override;
     void textEditorReturnKeyPressed (TextEditor& editor) override;
     bool keyPressed (const KeyPress& key, Component* originatingComponent) override;
+    void mouseDoubleClick (const MouseEvent& event) override;
 
     void paint (Graphics& g) override;
     void resized() override;

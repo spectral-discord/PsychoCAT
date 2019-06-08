@@ -32,6 +32,8 @@ SavedDistributionsList::SavedDistributionsList()
     view.setScrollBarsShown (false, false, true, false);
     addAndMakeVisible (view);
     
+    addMouseListener (this, true);
+    
     addKeyListener (this);
     setWantsKeyboardFocus (true);
 }
@@ -176,6 +178,22 @@ bool SavedDistributionsList::keyPressed (const KeyPress& key, Component* origina
     }
     
     return false;
+}
+
+void SavedDistributionsList::mouseDoubleClick (const MouseEvent& event)
+{
+    for (auto fileButton : fileButtons)
+    {
+        if (event.eventComponent == fileButton)
+        {
+            selectedFile = fileList[fileButtons.indexOf (fileButton)];
+            
+            openButton.setEnabled (true);
+            openButton.triggerClick();
+            
+            return;
+        }
+    }
 }
 
 void SavedDistributionsList::displayFiles (String searchParam)

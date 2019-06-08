@@ -52,6 +52,9 @@ DissonanceMap::DissonanceMap()   : mapData (IDs::Calculator)
     lockScale.addListener (this);
     addAndMakeVisible (lockScale);
     
+    setRepaintsOnMouseActivity (true);
+    setWantsKeyboardFocus (true);
+    
     mapData.addListener (this);
 }
 
@@ -70,8 +73,82 @@ void DissonanceMap::paint (Graphics& g)
     // Check if all the data needed to calculate a dissonance map is available
     if (calc.isReadyToProcess())
     {
-        denormalizer.start = 0;
-        denormalizer.end = getHeight() - 25;
+        if (mapNeedsRedrawn)
+        {
+            calc.calculateDissonanceMap();
+            mapNeedsRedrawn = false;
+        
+            findMinAndMax (calc.get2dRawDissonanceData(), calc.getNumSteps(),
+                           normalizer.start, normalizer.end);
+            
+            // Lock the dissonance scale or use locked scale values unless the scale needs to be expanded
+            // Might want to let dissonance values fall outside of the locked scale, we'll see...
+            if (mapData[IDs::ScaleLocked].operator bool())
+            {
+                if (! mapData.hasProperty (IDs::ScaleMax)
+                    || mapData[IDs::ScaleMax].operator float() < normalizer.end)
+                    mapData.setProperty (IDs::ScaleMax, normalizer.end, nullptr);
+                
+                if (! mapData.hasProperty (IDs::ScaleMin)
+                    || mapData[IDs::ScaleMin].operator float() > normalizer.start)
+                    mapData.setProperty (IDs::ScaleMin, normalizer.start, nullptr);
+                
+                normalizer.start = mapData[IDs::ScaleMin];
+                normalizer.end = mapData[IDs::ScaleMax];
+            }
+        }
+        
+        // Prevents attempting to draw within an invalid range
+        // This should only happen when only a single partial is present (creates no dissonance by itself)
+        if (normalizer.start == 0
+            && normalizer.end == 0)
+            return;
+        
+        float dissHeight;
+        float nextDissHeight;
+        
+        g.setColour (Theme::activeText);
+        
+        // Draw the dissonance curve
+        // (Inverted because (0, 0) is the top-left corner of the component)
+        for (int i = 0; i < calc.getNumSteps() - 1; ++i)
+        {
+            dissHeight = normalizer.convertTo0to1 (calc.getDissonanceAtStep (i));
+            dissHeight = abs (dissHeight - 1);
+            dissHeight = denormalizer.convertFrom0to1 (dissHeight);
+            
+            nextDissHeight = normalizer.convertTo0to1 (calc.getDissonanceAtStep (i + 1));
+            nextDissHeight = abs (nextDissHeight - 1);
+            nextDissHeight = denormalizer.convertFrom0to1 (nextDissHeight);
+            
+            g.drawLine (i + 1, dissHeight, i + 2, nextDissHeight, 2);
+        }
+        
+        // Draw mouse-over frequency and ratio boxes that show the frequency in Hz and as
+        // a ratio to the start frequency at the location of the cursor
+        if (isMouseOver()
+            && getMouseXYRelative().getY() < getHeight() - 25
+            && getMouseXYRelative().getX() > 0
+            && getMouseXYRelative().getX() < getWidth() - 2)
+        {
+            Rectangle<int> freqBox (-1, getHeight() - 45, 80, 20);
+            Rectangle<int> ratioBox (getWidth() - 50, getHeight() - 45,
+                                     51, 20);
+            
+            g.setColour (Theme::mainBackground);
+            g.fillRect (freqBox.withHeight (18));
+            g.fillRect (ratioBox.withHeight (18));
+
+            g.setColour (Theme::border);
+            g.drawRect (freqBox);
+            g.drawRect (ratioBox);
+
+            g.setColour (Theme::text);
+            g.drawText (String (calc.getFrequencyAtStep (getMouseXYRelative().getX() - 1), 1) + String (" Hz"),
+                        freqBox.reduced (2), Justification::centred);
+            g.drawText (String (calc.getFreqRatioAtStep (getMouseXYRelative().getX() - 1), 3),
+                        ratioBox.reduced (2), Justification::centred);
+        }
         
         // Draw map grid lines
         int gridLines = mapData.getParent()[IDs::GridLines];
@@ -105,91 +182,7 @@ void DissonanceMap::paint (Graphics& g)
                 }
             }
         }
-        
-        denormalizer.start = 5;
-        denormalizer.end = getHeight() - 30;
-        
-        g.setColour (Theme::activeText);
-
-        calc.calculateDissonanceMap();
-        
-        findMinAndMax (calc.get2dRawDissonanceData(), calc.getNumSteps(),
-                       normalizer.start, normalizer.end);
-        
-        // Lock the dissonance scale or use locked scale values unless the scale needs to be expanded
-        // Might want to let dissonance values fall outside of the locked scale, we'll see...
-        if (mapData[IDs::ScaleLocked].operator bool())
-        {
-            if (! mapData.hasProperty (IDs::ScaleMax)
-                || mapData[IDs::ScaleMax].operator float() < normalizer.end)
-                mapData.setProperty (IDs::ScaleMax, normalizer.end, nullptr);
-            
-            if (! mapData.hasProperty (IDs::ScaleMin)
-                || mapData[IDs::ScaleMin].operator float() > normalizer.start)
-                mapData.setProperty (IDs::ScaleMin, normalizer.start, nullptr);
-            
-            normalizer.start = mapData[IDs::ScaleMin];
-            normalizer.end = mapData[IDs::ScaleMax];
-        }
-        
-        // Prevents attempting to draw within an invalid range
-        // This should only happen when only a single partial is present (creates no dissonance by itself)
-        if (normalizer.start == 0
-            && normalizer.end == 0)
-            return;
-
-        float dissHeight;
-        float nextDissHeight;
-        
-        // Draw the dissonance curve
-        // (Inverted because (0, 0) is the top-left corner of the component)
-        for (int i = 0; i < calc.getNumSteps() - 1; ++i)
-        {
-            dissHeight = normalizer.convertTo0to1 (calc.getDissonanceAtStep (i));
-            dissHeight = abs (dissHeight - 1);
-            dissHeight = denormalizer.convertFrom0to1 (dissHeight);
-            
-            nextDissHeight = normalizer.convertTo0to1 (calc.getDissonanceAtStep (i + 1));
-            nextDissHeight = abs (nextDissHeight - 1);
-            nextDissHeight = denormalizer.convertFrom0to1 (nextDissHeight);
-            
-            g.drawLine (i + 1, dissHeight, i + 2, nextDissHeight, 2);
-        }
     }
-    /*
-    // Just for quick testing of data model operations
-    else
-    {
-        int x = 10, y = 10;
-        
-        for (int i = 0; i < calc.numOvertoneDistributions(); ++i)
-        {
-            OvertoneDistribution& dist = *calc.getDistributionReference (i);
-            
-            g.drawText (String (dist.getFundamentalFreq()),
-                        x, y, 30, 15, Justification::centred);
-            
-            g.drawText (String (dist.getFundamentalAmp()),
-                        x + 30, y, 30, 15, Justification::centred);
-            
-            y += 15;
-            
-            for (int j = 0; j < dist.numPartials(); ++j)
-            {
-                g.drawText (String (dist.getFreqRatio (j)),
-                            x, y, 30, 15, Justification::centred);
-                
-                g.drawText (String (dist.getAmpRatio (j)),
-                            x + 30, y, 30, 15, Justification::centred);
-                
-                y += 15;
-            }
-        
-            x += 75;
-            y = 10;
-            
-        }
-    }*/
 }
 
 void DissonanceMap::resized()
@@ -204,6 +197,9 @@ void DissonanceMap::resized()
     endRatio.setBounds (footer.removeFromRight (75));
     
     mapData.setProperty (IDs::NumSteps, getWidth() - 2, nullptr);
+    
+    denormalizer.start = 5;
+    denormalizer.end = getHeight() - 30;
 }
 
 void DissonanceMap::comboBoxChanged (ComboBox* changedBox)
@@ -322,6 +318,15 @@ void DissonanceMap::buttonClicked (Button* clickedButton)
     }
 }
 
+void DissonanceMap::mouseMove (const MouseEvent& event)
+{
+    if (isMouseOver()
+        && getMouseXYRelative().getY() < getHeight() - 25
+        && getMouseXYRelative().getX() > 0
+        && getMouseXYRelative().getX() < getWidth() - 2)
+        repaint();
+}
+
 void DissonanceMap::valueTreeChildAdded (ValueTree& parent, ValueTree& newChild)
 {
     if (newChild.hasType (IDs::OvertoneDistribution)
@@ -384,6 +389,7 @@ void DissonanceMap::valueTreeChildAdded (ValueTree& parent, ValueTree& newChild)
         parent.sort (comparator, nullptr, false);
     }
     
+    mapNeedsRedrawn = true;
     repaint();
 }
 
@@ -400,6 +406,7 @@ void DissonanceMap::valueTreeChildRemoved (ValueTree& parent, ValueTree& removed
         calc.getDistributionReference (parent.getParent().indexOf (parent))->removePartial (childIndex);
     }
     
+    mapNeedsRedrawn = true;
     repaint();
 }
 
@@ -410,6 +417,11 @@ void DissonanceMap::valueTreeChildRemoved (ValueTree& parent, ValueTree& removed
 */
 void DissonanceMap::valueTreePropertyChanged (ValueTree& parent, const Identifier& ID)
 {
+    // So we don't have to redraw when just trying to view a distribution's partials
+    if (ID == IDs::IsViewed)
+        return;
+    
+    // Set the changed parameter in the DissonanceCalc object
     if (parent == mapData && ID == IDs::NumSteps)
     {
         if (mapData[ID].operator int() > 0)
@@ -545,6 +557,7 @@ void DissonanceMap::valueTreePropertyChanged (ValueTree& parent, const Identifie
     }
 
     // Redraw the dissonance map (or remove the old map, if new data is needed)
+    mapNeedsRedrawn = true;
     repaint();
 }
 
