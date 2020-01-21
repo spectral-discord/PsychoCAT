@@ -30,6 +30,7 @@ namespace IDs
     DECLARE_ID (Name);
     DECLARE_ID (FundamentalFreq);
     DECLARE_ID (FundamentalAmp);
+    DECLARE_ID (FundamentalMute);
     DECLARE_ID (MinInterval);
     DECLARE_ID (XAxis);
     DECLARE_ID (YAxis);
@@ -53,6 +54,9 @@ namespace IDs
     
     // Tree
     DECLARE_ID (CalculatorList);
+    // Properties
+    DECLARE_ID (ShowMinima);
+    DECLARE_ID (ShowMaxima);
     // Children: Calculator[]
     
     // Tree

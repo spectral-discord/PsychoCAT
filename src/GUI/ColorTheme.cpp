@@ -14,14 +14,17 @@
 #include "ColorTheme.h"
 
 const Colour Theme::mainBackground      (0xff1c1b1e);
-const Colour Theme::mapBackground       (0xff3a3a3a);
+const Colour Theme::mapBackground       (0xff212121);
 const Colour Theme::mainButton          (0xff1c1b1e);
-const Colour Theme::buttonHighlighted   (0xff463a56);
+const Colour Theme::buttonHighlighted   (0xff6a5f78);
 const Colour Theme::buttonDisabled      (0xff545454);
 const Colour Theme::border              (0xff545454);
 const Colour Theme::text                (0xffdbdbdb);
 const Colour Theme::activeText          (0xff9560ff);
-const Colour Theme::headerBackground    (0xff161616);
-const Colour Theme::buttonPressed       (0xff161616);
+const Colour Theme::accentBackground    (0xff3b393b);
+const Colour Theme::minima              (0xff609dff);
+const Colour Theme::maxima              (0xffff6085);
+const Colour Theme::headerBackground    (0xff4d4159);
+const Colour Theme::darkAccent          (0xff39118a);
 
 

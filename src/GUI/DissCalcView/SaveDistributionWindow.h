@@ -16,7 +16,7 @@
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "ThemedComponents.h"
 #include "IDs.h"
-#include "DisMAL/DisMAL.h"
+#include "../../../DisMAL/DisMAL.h"
 
 class SaveDistributionWindow   : public Component,
                                  public Button::Listener,
@@ -34,22 +34,20 @@ public:
     void textEditorReturnKeyPressed (TextEditor& editor) override;
     void textEditorTextChanged (TextEditor& editor) override;
     void buttonClicked (Button* clickedButton) override;
-    void buttonStateChanged (Button* button) override;
     bool keyPressed (const KeyPress& key, Component* originatingComponent) override;
     
     // Inits & shows the component
     void show (ValueTree& newDistribution);
+    void save();
 
 private:
     // Data
     ValueTree distribution;
     FileIO file;
-    bool overwrite;
     
     // GUI components
     ThemedTextEditor distributionName;
-    ThemedButton saveButton, cancelButton;
-    ThemedToggleButton overwriteButton;
+    ThemedButton saveButton, cancelButton, overwriteButton, overwriteCancelButton;
     
     void resetFilePath();
     

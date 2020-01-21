@@ -30,11 +30,15 @@ public:
     
     void setBorders (bool left, bool top, bool right, bool bottom, int width);
     void setFontSize (float newFontSize);
+    void setIcon (bool setUseIcon, Icon newIcon, float newRotation = 0);
+    void setIconSize (float newIconSize);
+    void setPanelButton (bool isPanelButton);
     
 private:
-    bool leftBorder, rightBorder, topBorder, bottomBorder;
+    bool leftBorder, rightBorder, topBorder, bottomBorder, useIcon, panelButton;
     int borderWidth;
-    float fontSize;
+    float fontSize, iconSize, rotation;
+    Icon icon;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ThemedButton)
 };
@@ -47,8 +51,12 @@ public:
     ~ThemedTextEditor();
         
     void setBordered (bool border);
+    void setEvaluateExpressions (bool evaluate);
+    double getEvaluated();
     
 private:
+    bool evaluateExpressions;
+    String expression;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ThemedTextEditor)
 };
@@ -70,7 +78,7 @@ class ThemedToggleButton   : public ToggleButton
 public:
     ThemedToggleButton();
     ~ThemedToggleButton();
-    
+        
 private:    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ThemedToggleButton)
 };

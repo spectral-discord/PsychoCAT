@@ -22,19 +22,20 @@ MainComponent::MainComponent()   : calcData (IDs::CalculatorList)
     options.folderName = "PsychoCAT";
     
     settings.setStorageParameters (options);
+    settingsMenu.init (&settings);
     
     addAndMakeVisible (&calcView);
     calcView.setData (calcData);
     
-    if (! settings.getUserSettings()->getIntValue ("windowHeight"))
-        settings.getUserSettings()->setValue ("windowHeight", 600);
-    if (! settings.getUserSettings()->getIntValue ("windowWidth"))
-        settings.getUserSettings()->setValue ("windowWidth", 800);
+    if (! settings.getUserSettings()->containsKey ("Window Height"))
+        settings.getUserSettings()->setValue ("Window Height", 600);
+    if (! settings.getUserSettings()->containsKey ("Window Height"))
+        settings.getUserSettings()->setValue ("Window Height", 800);
     
     // Make sure you set the size of the component after
     // you add any child components.
-    setSize (settings.getUserSettings()->getIntValue ("windowWidth"),
-             settings.getUserSettings()->getIntValue ("windowHeight"));
+    setSize (settings.getUserSettings()->getIntValue ("Window Height"),
+             settings.getUserSettings()->getIntValue ("Window Height"));
 
     // Some platforms require permissions to open input channels
     if (RuntimePermissions::isRequired (RuntimePermissions::recordAudio)
@@ -84,4 +85,9 @@ void MainComponent::resized()
     
     settings.getUserSettings()->setValue ("windowWidth", getWidth());
     settings.getUserSettings()->setValue ("windowHeight", getHeight());
+}
+
+PropertiesFile* MainComponent::getSettings()
+{
+    return settings.getUserSettings();
 }

@@ -33,6 +33,8 @@ public:
     // GUI callbacks
     void buttonClicked (Button* clickedButton) override;
     void mouseDown (const MouseEvent& event) override;
+    void mouseExit (const MouseEvent &event) override;
+    void mouseMove (const MouseEvent &event) override;
     
     // Data model callbacks
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override;
@@ -48,7 +50,7 @@ public:
     void setDistributionData (ValueTree& newDistribution);
     ValueTree& getDistributionData();
     
-    ThemedButton muteButton, optionsButton;
+    ThemedButton optionsButton;
     ValueTree distribution;
 
 private:    
@@ -96,6 +98,21 @@ private:
 
 //==============================================================================
 /*
+ This subclass of Viewport is only created to override visibleAreaChanged()
+ */
+class CalcViewport   : public Viewport
+{
+public:
+    CalcViewport(){}
+    ~CalcViewport(){}
+    
+    void visibleAreaChanged (const Rectangle<int>& newVisibleArea) override;
+    
+private:
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CalcViewport)
+};
+
+/*
     Parent component for DistributionList, with GUI controls for deleting and
     duplicating the entire dissonance calc.
 */
@@ -106,21 +123,21 @@ public:
     DissCalc();
     ~DissCalc();
     
-    void paint (Graphics& g);
-    void resized();
+    void paint (Graphics& g) override;
+    void resized() override;
     
     // GUI callback
-    void buttonClicked (Button* clickedButton);
+    void buttonClicked (Button* clickedButton) override;
     
     // Get/set the valuetree data for this dissonance calc
     void setCalcData (ValueTree& distributions);
     ValueTree& getCalcData();
     
-    ThemedButton addDistributionButton, optionsButton;
+    ThemedButton addDistributionButton, removeButton, copyButton, lockScaleButton, logButton;
 
 private:
     DistributionList distributionList;
-    Viewport view;
+    CalcViewport view;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DissCalc)
 
@@ -146,7 +163,7 @@ public:
     // Data model callbacks
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override;
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override;
-    
+
     // Unused pure-virtual callbacks inhereted from ValueTree::Listener
     void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override {}
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override {}
@@ -172,41 +189,12 @@ public:
     
     void paint (Graphics& g) override;
     void resized() override;
-    
-    ThemedButton removeButton, duplicateButton, setXAxisButton, setFromSavedButton, saveButton;
+        
+    ThemedButton removeButton, duplicateButton, setXAxisButton, setFromSavedButton, saveButton, muteButton;
     DistributionComponent* distribution;
     
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DistributionOptions)
-};
-
-// Component for various DissCalc controls
-// Should combine with the above DistributionOptions to satisfy DRY
-// -------------- A better solution is a later Lina problem! --------------
-class CalcOptions   : public DistributionOptions
-{
-public:
-    CalcOptions()
-    {
-        calc = nullptr;
-        removeChildComponent (&setXAxisButton);
-        removeChildComponent (&setFromSavedButton);
-    }
-    ~CalcOptions(){}
-    
-    void resized() override
-    {
-        Rectangle<int> area = getLocalBounds().reduced (1);
-        int buttonHeight = getHeight() / 2;
-        
-        duplicateButton.setBounds (area.removeFromTop (buttonHeight));
-        removeButton.setBounds (area);
-    }
-    
-    DissCalc* calc;
-    
-private:
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CalcOptions)
 };
 
 //==============================================================================
@@ -224,25 +212,15 @@ public:
     // GUI callbacks
     void buttonClicked (Button* clickedButton) override;
     
-    // Mouse event callbacks
-    void mouseDown (const MouseEvent& event) override;
-    
     // For setting the top-level valuetree node for dissonance calculations
     void setCalcData (ValueTree& calcData);
     
-    // Opens the options components for distributions or dissonance calcs
-    void openOptions (DistributionComponent* component);
-    void openOptions (DissCalc* calc);
-    
     Viewport view;
     UndoManager* undo;
+    DistributionOptions* options;
     
 private:
     CalcList calcs;
-    
-    DistributionOptions options;
-    CalcOptions calcOptions;
-    
     ThemedButton addCalcButton;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DissCalcPanel)

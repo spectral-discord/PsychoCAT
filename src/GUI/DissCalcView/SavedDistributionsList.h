@@ -15,7 +15,7 @@
 
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "ThemedComponents.h"
-#include "DisMAL/FileIO.h"
+#include "../../../DisMAL/FileIO.h"
 
 //==============================================================================
 /*
@@ -51,7 +51,7 @@ private:
     Component viewComponent;
     OwnedArray<ThemedButton> fileButtons;
     ThemedTextEditor searchBar;
-    ThemedButton openButton;
+    ThemedButton openButton, closeButton;
     
     // Data
     ValueTree distributionNode;

@@ -14,6 +14,7 @@
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "SavedDistributionsList.h"
 #include "DissCalcView.h"
+#include "MainComponent.h"
 
 //==============================================================================
 SavedDistributionsList::SavedDistributionsList()
@@ -22,11 +23,19 @@ SavedDistributionsList::SavedDistributionsList()
     searchBar.addListener (this);
     addAndMakeVisible (searchBar);
     
-    openButton.setButtonText ("Open");
-    openButton.setBorders (true, true, true, true, 1);
+    openButton.setIcon (true, FontAwesome_FolderOpen);
+    openButton.setIconSize (22);
+    openButton.setPanelButton (true);
     openButton.setEnabled (false);
     openButton.addListener (this);
     addAndMakeVisible (openButton);
+    openButton.setTooltip ("Open");
+    
+    closeButton.setIcon (true, FontAwesome_WindowClose);
+    closeButton.addListener (this);
+    closeButton.setPanelButton (true);
+    closeButton.setIconSize (26);
+    addAndMakeVisible (closeButton);
     
     view.setViewedComponent (&viewComponent, false);
     view.setScrollBarsShown (false, false, true, false);
@@ -44,15 +53,16 @@ SavedDistributionsList::~SavedDistributionsList()
 
 void SavedDistributionsList::paint (Graphics& g)
 {
-    g.fillAll (Theme::mainBackground);
+    g.fillAll (Theme::headerBackground);
     
-    g.setColour (Theme::text);
-    g.setFont (16.f);
-    g.drawText ("Saved Timbres", 15, 10, 150, 25, Justification::centredLeft);
+    g.setColour (Theme::mainBackground);
+    Font f = g.getCurrentFont();
+    f.setHeight (22.f);
+    f.setBold (true);
+    g.setFont (f);
     
-    g.setColour (Theme::border);
-    g.drawRect (getLocalBounds());
-    g.drawRect (view.getBounds().expanded (5));
+    g.drawText ("Saved Timbres", 10, 5, 150, 25, Justification::centredLeft);
+    g.fillRect (getLocalBounds().reduced (3).withTop (35).withBottom (getHeight() - 45));
 }
 
 void SavedDistributionsList::resized()
@@ -60,10 +70,14 @@ void SavedDistributionsList::resized()
     view.setBounds (Rectangle<int> (15, 40, getWidth() - 30, getHeight() - 90).reduced (5));
     viewComponent.setBounds (view.getBounds());
     
-    Rectangle<int> footer = getLocalBounds().removeFromBottom (50);
+    Rectangle<int> footer = getLocalBounds().removeFromBottom (45);
+    Rectangle<int> header = getLocalBounds().removeFromTop (35);
+
+    openButton.setBounds (footer.removeFromRight (45).reduced (10));
+    searchBar.setBounds (footer.reduced (10).withWidth (footer.getWidth() - 10));
     
-    openButton.setBounds (footer.removeFromRight (100).reduced (15));
-    searchBar.setBounds (footer.removeFromRight (footer.getWidth() - 15).reduced (0, 15));
+    closeButton.setBounds (header.removeFromRight (header.getHeight()).reduced (3));
+    closeButton.setTopLeftPosition (closeButton.getX() - 1, closeButton.getY());
 }
 
 void SavedDistributionsList::show (ValueTree& treeNode)
@@ -85,16 +99,27 @@ void SavedDistributionsList::buttonClicked (Button* clickedButton)
 {
     if (clickedButton == &openButton)
     {
+        ValueTree current = distributionNode;
+        ValueTree parent = distributionNode.getParent();
+        ValueTree newCalc (IDs::OvertoneDistribution);
+        distributionNode = newCalc;
+
         FileIO io = selectedFile;
-        
-        bool x = distributionNode[IDs::XAxis];
+        int index = parent.indexOf (current);
+        bool x = current[IDs::XAxis];
+        newCalc.copyPropertiesAndChildrenFrom (io.loadTreeFromFile(), nullptr);
         
         undo->beginNewTransaction();
-        distributionNode.copyPropertiesAndChildrenFrom (io.loadTreeFromFile(),
-                                                        undo);
         
-        distributionNode.setProperty (IDs::XAxis, x, undo);
+        parent.removeChild (index, undo);
+        parent.addChild (newCalc, index, undo);
+        newCalc.setProperty (IDs::XAxis, x, undo);
         
+        exitModalState (1);
+        setVisible (false);
+    }
+    else if (clickedButton == &closeButton)
+    {
         exitModalState (1);
         setVisible (false);
     }
@@ -198,20 +223,7 @@ void SavedDistributionsList::mouseDoubleClick (const MouseEvent& event)
 
 void SavedDistributionsList::displayFiles (String searchParam)
 {
-    File dismalDirectory;
-    
-    if (JUCE_MAC)
-    {
-        dismalDirectory = "~/Library/Application Support/DisMAL/Timbres";
-    }
-    else
-    {
-        dismalDirectory = String (File::getSpecialLocation (File::userApplicationDataDirectory).getFullPathName()
-                                  + dismalDirectory.getSeparatorChar()
-                                  + String ("DisMAL")
-                                  + dismalDirectory.getSeparatorChar()
-                                  + String ("Timbres"));
-    }
+    File dismalDirectory (findParentComponentOfClass<MainComponent>()->getSettings()->getValue ("Saved Distribution Location"));
     
     if (! dismalDirectory.exists())
         dismalDirectory.createDirectory();
@@ -246,9 +258,19 @@ void SavedDistributionsList::displayFiles (String searchParam)
         fileButtons[i]->setButtonText (buttonText);
         fileButtons[i]->addListener (this);
         
-        if (i != fileList.size() - 1)
-            fileButtons[i]->setBorders (false, false,
-                                        false, true, 2);
+        if (fileList.size() > 1)
+        {
+            bool bottom = false;
+            bool top = false;
+            
+            if (i != fileList.size() - 1)
+                bottom = true;
+            
+            if (i != 0)
+                top = true;
+            
+            fileButtons[i]->setBorders (false, top, false, bottom, 2);
+        }
     }
     
     if (! fileList.contains (selectedFile))

@@ -62,7 +62,7 @@ public:
     bool containsFreq (float freq);
     
     ThemedTextEditor frequencyEditor, amplitudeEditor;
-    ThemedButton optionsButton, muteButton;
+    ThemedButton optionsButton;
     
 private:
     ValueTree partial;
@@ -182,7 +182,7 @@ public:
     
     PartialEditor* partial;
     
-    ThemedButton removeButton;
+    ThemedButton muteButton, removeButton;
     
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PartialOptions)
@@ -208,9 +208,7 @@ public:
     void buttonClicked (Button* clickedButton) override;
     
     ThemedTextEditor distributionName, fundamentalFreq, fundamentalAmp;
-    ShapeButton collapseButton;
-    Path arrowShape;
-    Line<float> arrowLine;
+    ThemedButton collapseButton, optionsButton;
     
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DistributionPanelTitleBar)
@@ -236,25 +234,18 @@ public:
     void textEditorTextChanged (TextEditor& editor) override;
     void textEditorFocusLost (TextEditor& editor) override;
     void textEditorReturnKeyPressed (TextEditor& editor) override;
-
-    // Mouse activity callback
-    void mouseDown (const MouseEvent& event) override;
-    
-    // Sets and draws the distribution panel's data, slides the panel into position
-    void openOptions (PartialEditor* component);
     
     // Get/set the currently viewed distribution data
     void setDistribution (ValueTree& newDistribution);
     ValueTree& getDistribution();
     
     UndoManager* undo;
+    PartialOptions* options;
+    DistributionPanelTitleBar titleBar;
 
 private:
-    DistributionPanelTitleBar titleBar;
     Viewport distributionListView;
     PartialEditorList partialList;
-    
-    PartialOptions options;
     
     ThemedButton addButton;
     

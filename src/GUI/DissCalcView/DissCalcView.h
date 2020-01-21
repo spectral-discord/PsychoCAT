@@ -45,6 +45,11 @@ public:
     void repositionCalcPanel (int height);
     
     bool keyPressed (const KeyPress& key, Component* originatingComponent) override;
+    void mouseDown (const MouseEvent& event) override;
+    
+    // Opens the options components for distributions or partials
+    void openOptions (DistributionComponent* component);
+    void openOptions (PartialEditor* component, bool isFundamental = false);
     
     SaveDistributionWindow saveDistribution;
     SavedDistributionsList savedDistributionList;
@@ -53,7 +58,9 @@ private:
     DissCalcPanel calcPanel;
     DistributionPanel distributionPanel;
     DissMapComponent mapComponent;
-    
+    DistributionOptions distributionOptions;
+    PartialOptions partialOptions;
+
     ValueTree calcData;
     UndoManager undo;
     

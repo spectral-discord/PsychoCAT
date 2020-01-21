@@ -15,8 +15,64 @@
 
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "ThemedComponents.h"
-#include "DisMAL/DisMAL.h"
+#include "../../../DisMAL/DisMAL.h"
 #include "DistributionPanel.h"
+
+class DissonanceMap;
+
+//==============================================================================
+/*
+    Class for creating dissonance optima objects that will display the optima's frequency and ratio on mouse hover.
+ 
+    The component will be drawn on the dissonance curve at the corresponding optima, and can be clicked to add the
+    optima to the tuning panel.
+*/
+class OptimaComponent   : public Component,
+                          public SettableTooltipClient
+{
+public:
+    OptimaComponent (float frequency, String tooltip, bool isMinima);
+    ~OptimaComponent();
+    
+    void paint (Graphics& g) override;
+    
+    float getFreq();
+    
+private:
+    float freq;
+    bool isMin;
+    
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OptimaComponent)
+};
+
+/*
+    Creates a thread pool job for finding dissonance optima and creating optima components.
+*/
+class FindAndCreateOptimaJob   : public ThreadPoolJob
+{
+public:
+    FindAndCreateOptimaJob (DissonanceMap* parentComponent, bool isMin);
+    ~FindAndCreateOptimaJob();
+    
+    JobStatus runJob() override;
+    void rerunWhenDone();
+    
+private:
+    DissonanceMap* parent;
+    bool isMin, rerun;
+};
+
+class AsyncOptimaUpdater   : public AsyncUpdater
+{
+public:
+    AsyncOptimaUpdater (DissonanceMap* parentComponent);
+    ~AsyncOptimaUpdater(){}
+    
+    void handleAsyncUpdate() override;
+    
+private:
+    DissonanceMap* parent;
+};
 
 //==============================================================================
 /*
@@ -30,7 +86,6 @@
 class DissonanceMap   : public Component,
                         public TextEditor::Listener,
                         public ComboBox::Listener,
-                        public Button::Listener,
                         public ValueTree::Listener
 {
 public:
@@ -44,7 +99,6 @@ public:
     void comboBoxChanged (ComboBox* changedBox) override;
     void textEditorFocusLost (TextEditor& editor) override;
     void textEditorReturnKeyPressed (TextEditor& editor) override;
-    void buttonClicked (Button* clickedButton) override;
     void mouseMove (const MouseEvent& event) override;
     
     // Data model callbacks to set DisMAL data
@@ -57,20 +111,28 @@ public:
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
     void valueTreeRedirected (ValueTree& redirectedTree) override {}
     
+    void showOptima (bool isMin);
+    void recalculateDissonance();
+    void updateOptima();
+    void createOptimaComponents (bool isMin);
+    void drawOptimaComponents();
+    void clearOptima (bool isMinima);
+    
     ValueTree mapData;
+    AsyncOptimaUpdater asyncOptimaUpdater;
 
 private:
     ThemedComboBox dissonanceModel;
     ThemedTextEditor startFreq, endRatio;
-    ThemedToggleButton lockScale, logSteps;
     
     DissonanceCalc calc;
     NormalisableRange<float> normalizer, denormalizer;
+    OwnedArray<OptimaComponent> minima, maxima;
+    
+    FindAndCreateOptimaJob updateMinimaJob, updateMaximaJob;
     
     PartialComparator comparator;
-    
-    bool mapNeedsRedrawn;
-    
+        
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DissonanceMap)
 };
 
@@ -91,9 +153,9 @@ public:
     // Callbacks to create or remove DissonanceMap components
     void valueTreeChildAdded (ValueTree& parent, ValueTree& newChild) override;
     void valueTreeChildRemoved (ValueTree& parent, ValueTree& removedChild, int childIndex) override;
-    
+    void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override;
+
     // Unused pure-virtual callbacks inhereted from ValueTree::Listener
-    void valueTreePropertyChanged (ValueTree& parent, const Identifier& ID) override {}
     void valueTreeChildOrderChanged (ValueTree& parent, int oldIndex, int newIndex) override {}
     void valueTreeParentChanged (ValueTree& adoptedTree) override {}
     void valueTreeRedirected (ValueTree& redirectedTree) override {}
@@ -101,6 +163,7 @@ public:
     OwnedArray<DissonanceMap> maps;
     ValueTree mapsData;
     UndoManager* undo;
+    ThreadPool threadPool;
 private:
     int mapHeight;
     
@@ -126,7 +189,8 @@ private:
 
 //==============================================================================
 class DissMapComponentFooter   : public Component,
-                                 public ComboBox::Listener
+                                 public ComboBox::Listener,
+                                 public Button::Listener
 {
 public:
     DissMapComponentFooter();
@@ -136,11 +200,13 @@ public:
     void resized() override;
     
     void comboBoxChanged (ComboBox* changedBox) override;
+    void buttonClicked (Button* clickedButton) override;
     
     ValueTree data;
     
 private:
     ThemedComboBox gridLines;
+    ThemedButton showMinima, showMaxima;
 };
 
 //==============================================================================

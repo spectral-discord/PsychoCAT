@@ -15,6 +15,7 @@
 
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "DissCalcView.h"
+#include "SettingsMenu.h"
 
 //==============================================================================
 /*
@@ -36,6 +37,8 @@ public:
     //==============================================================================
     void paint (Graphics& g) override;
     void resized() override;
+    
+    PropertiesFile* getSettings();
 
 private:
     //==============================================================================
@@ -43,6 +46,7 @@ private:
     DissCalcView calcView;
     ApplicationProperties settings;
     PropertiesFile::Options options;
+    SettingsMenu settingsMenu;
         
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
